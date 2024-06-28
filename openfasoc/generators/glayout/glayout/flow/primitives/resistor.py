@@ -7,7 +7,7 @@ from glayout.flow.pdk.mappedpdk import MappedPDK
 from glayout.flow.primitives.guardring import tapring
 from glayout.flow.pdk.util.comp_utils import evaluate_bbox, add_ports_perimeter
 from gdsfactory.component import Component
-from gdsfactory.cell import cell 
+from gdsfactory import cell 
 from typing import Optional
 
 @cell

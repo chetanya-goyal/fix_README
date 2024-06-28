@@ -1,5 +1,5 @@
 from gdsfactory.grid import grid
-from gdsfactory.cell import cell
+from gdsfactory import cell
 from gdsfactory.component import Component, copy
 from gdsfactory.components.rectangle import rectangle
 from glayout.flow.pdk.mappedpdk import MappedPDK
@@ -15,14 +15,20 @@ from glayout.flow.pdk.util.snap_to_grid import component_snap_to_grid
 from decimal import Decimal
 from glayout.flow.routing.straight_route import straight_route
 from glayout.flow.spice import Netlist
+from glayout.flow.routing.hashport import HPort, init_hashport
+import kfactory as kf
+from gdsfactory import add_padding
+from gdsfactory.snap import snap_to_grid, assert_on_grid
 
-
-@validate_arguments
-def __gen_fingers_macro(pdk: MappedPDK, rmult: int, fingers: int, length: float, width: float, poly_height: float, sdlayer: str, inter_finger_topmet: str) -> Component:
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
+def __gen_fingers_macro(pdk: MappedPDK, rmult: int, fingers: int, length: float, width: float, poly_height: float, sdlayer: str, inter_finger_topmet: str, finger_cell_name: Optional[str] = "finger") -> Component:
     """internal use: returns an array of fingers"""
-    length = pdk.snap_to_2xgrid(length)
-    width = pdk.snap_to_2xgrid(width)
-    poly_height = pdk.snap_to_2xgrid(poly_height)
+    # length = pdk.snap_to_2xgrid(length)
+    # width = pdk.snap_to_2xgrid(width)
+    # poly_height = pdk.snap_to_2xgrid(poly_height)
+    length = snap_to_grid(length, nm = 10)
+    width = snap_to_grid(width, nm = 10)
+    poly_height = snap_to_grid(poly_height, nm = 10)
     sizing_ref_viastack = via_stack(pdk, "active_diff", "met1")
     # figure out poly (gate) spacing: s/d metal doesnt overlap transistor, s/d min seperation criteria is met
     sd_viaxdim = rmult*evaluate_bbox(via_stack(pdk, "active_diff", "met1"))[0]
@@ -31,36 +37,39 @@ def __gen_fingers_macro(pdk: MappedPDK, rmult: int, fingers: int, length: float,
     met1_minsep = pdk.get_grule("met1")["min_separation"]
     poly_spacing += met1_minsep if length < met1_minsep else 0
     # create a single finger
-    finger = Component("finger")
+    poly_spacing = snap_to_grid(poly_spacing, nm = 10)
+    finger = Component(f'{finger_cell_name}')
     gate = finger << rectangle(size=(length, poly_height), layer=pdk.get_glayer("poly"), centered=True)
-    sd_viaarr = via_array(pdk, "active_diff", "met1", size=(sd_viaxdim, width), minus1=True, lay_bottom=False).copy()
+    sd_viaarr = via_array(pdk, "active_diff", "met1", size=(snap_to_grid(sd_viaxdim, nm = 10), width), minus1=True, lay_bottom=False).copy()
     interfinger_correction = via_array(pdk,"met1",inter_finger_topmet, size=(None, width),lay_every_layer=True, num_vias=(1,None))
     sd_viaarr << interfinger_correction
     sd_viaarr_ref = finger << sd_viaarr
-    sd_viaarr_ref.movex((poly_spacing+length) / 2)
-    finger.add_ports(gate.get_ports_list(),prefix="gate_")
-    finger.add_ports(sd_viaarr_ref.get_ports_list(),prefix="rightsd_")
+    move_dim = snap_to_grid((poly_spacing+length) / 2, nm = 10)
+    sd_viaarr_ref.dmovex(move_dim)
+    finger.add_ports(gate.ports,prefix="gate_")
+    finger.add_ports(sd_viaarr_ref.ports,prefix="rightsd_")
     # create finger array
-    fingerarray = prec_array(finger, columns=fingers, rows=1, spacing=(poly_spacing+length, 1),absolute_spacing=True)
+    fingerarray = prec_array(finger, columns=fingers, rows=1, spacing=(snap_to_grid(poly_spacing+length), 1),absolute_spacing=True)
     sd_via_ref_left = fingerarray << sd_viaarr
-    sd_via_ref_left.movex(0-(poly_spacing+length)/2)
-    fingerarray.add_ports(sd_via_ref_left.get_ports_list(),prefix="leftsd_")
+    move_dim = snap_to_grid(0-(poly_spacing+length)/2, nm = 10)
+    sd_via_ref_left.dmovex(move_dim)
+    fingerarray.add_ports(sd_via_ref_left.ports,prefix="leftsd_")
     # center finger array and add ports
     centered_farray = Component()
     fingerarray_ref_center = prec_ref_center(fingerarray)
     centered_farray.add(fingerarray_ref_center)
-    centered_farray.add_ports(fingerarray_ref_center.get_ports_list())
+    centered_farray.add_ports(fingerarray_ref_center.ports)
     # create diffusion and +doped region
     multiplier = rename_ports_by_orientation(centered_farray)
     diff_extra_enc = 2 * pdk.get_grule("mcon", "active_diff")["min_enclosure"]
-    diff_dims =(diff_extra_enc + evaluate_bbox(multiplier)[0], width)
+    diff_dims = tuple([snap_to_grid(diff_extra_enc + evaluate_bbox(multiplier)[0], nm = 10), snap_to_grid(width, nm = 10)])
     diff = multiplier << rectangle(size=diff_dims,layer=pdk.get_glayer("active_diff"),centered=True)
     sd_diff_ovhg = pdk.get_grule(sdlayer, "active_diff")["min_enclosure"]
-    sdlayer_dims = [dim + 2*sd_diff_ovhg for dim in diff_dims]
+    sdlayer_dims = tuple([snap_to_grid(dim + 2*sd_diff_ovhg, nm = 10) for dim in diff_dims])
     sdlayer_ref = multiplier << rectangle(size=sdlayer_dims, layer=pdk.get_glayer(sdlayer),centered=True)
-    multiplier.add_ports(sdlayer_ref.get_ports_list(),prefix="plusdoped_")
-    multiplier.add_ports(diff.get_ports_list(),prefix="diff_")
-    return component_snap_to_grid(rename_ports_by_orientation(multiplier))
+    multiplier.add_ports(sdlayer_ref.ports,prefix="plusdoped_")
+    multiplier.add_ports(diff.ports,prefix="diff_")
+    return component_snap_to_grid(rename_ports_by_orientation(multiplier), flatten_true = False)
 
 def fet_netlist(
     pdk: MappedPDK,
@@ -112,7 +121,7 @@ XMAIN   D G S B {model} l={{l}} w={{w}} m={{m}}"""
     )
 
 # drain is above source
-@cell
+@cell(check_ports=False)
 def multiplier(
     pdk: MappedPDK,
     sdlayer: str,
@@ -189,59 +198,73 @@ def multiplier(
     # route all drains/ gates/ sources
     if routing:
         # place vias, then straight route from top port to via-botmet_N
-        sd_N_port = multiplier.ports["leftsd_top_met_N"]
+        sd_N_port = init_hashport(multiplier.ports["leftsd_top_met_N"], layer_overload = pdk.get_glayer('met1'))
         sdvia = via_stack(pdk, "met1", sd_route_topmet)
         sdmet_hieght = sd_rmult*evaluate_bbox(sdvia)[1]
         sdroute_minsep = pdk.get_grule(sd_route_topmet)["min_separation"]
         sdvia_ports = list()
         for finger in range(fingers+1):
-            diff_top_port = movey(sd_N_port,destination=width/2)
+            diff_top_port = sd_N_port.Hmovey(snap_to_grid(width / 2, nm = 10))
+            # diff_top_port = movey(sd_N_port,destination=width/2)
             # place sdvia such that metal does not overlap diffusion
             big_extension = sdroute_minsep + sdmet_hieght/2 + sdmet_hieght
             sdvia_extension = big_extension if finger % 2 else sdmet_hieght/2
             sdvia_ref = align_comp_to_port(sdvia,diff_top_port,alignment=('c','t'))
-            multiplier.add(sdvia_ref.movey(sdvia_extension + pdk.snap_to_2xgrid(sd_route_extension)))
-            multiplier << straight_route(pdk, diff_top_port, sdvia_ref.ports["bottom_met_N"])
-            sdvia_ports += [sdvia_ref.ports["top_met_W"], sdvia_ref.ports["top_met_E"]]
+            multiplier.add(sdvia_ref.dmovey(snap_to_grid(sdvia_extension + sd_route_extension, nm = 10)))
+            sdvia_ref_port = init_hashport(sdvia_ref.ports["top_met_N"], layer_overload = pdk.get_glayer('met1'))  
+            multiplier << straight_route(pdk, diff_top_port, sdvia_ref_port)
+            p0 = init_hashport(sdvia_ref.ports["top_met_W"], layer_overload = pdk.get_glayer(sd_route_topmet))
+            p1 = init_hashport(sdvia_ref.ports["top_met_E"], layer_overload = pdk.get_glayer(sd_route_topmet))
+            sdvia_ports += [p0, p1]
             # get the next port (break before this if last iteration because port D.N.E. and num gates=fingers)
             if finger==fingers:
                 break
-            sd_N_port = multiplier.ports[f"row0_col{finger}_rightsd_top_met_N"]
+            sd_N_port = init_hashport(multiplier.ports[f"row0_col{finger}_rightsd_top_met_N"], layer_overload = pdk.get_glayer("met1"))
             # route gates
-            gate_S_port = multiplier.ports[f"row0_col{finger}_gate_S"]
+            gate_S_port = init_hashport(multiplier.ports[f"row0_col{finger}_gate_S"], layer_overload = pdk.get_glayer("poly"))
             metal_seperation = pdk.util_max_metal_seperation()
-            psuedo_Ngateroute = movey(gate_S_port.copy(),0-metal_seperation-gate_route_extension)
-            psuedo_Ngateroute.y = pdk.snap_to_2xgrid(psuedo_Ngateroute.y)
+            psuedo_Ngateroute = gate_S_port.Hmovey(snap_to_grid(gate_S_port.dcenter[1]+0-metal_seperation-gate_route_extension, nm = 10))
+            psuedo_Ngateroute.y = snap_to_grid(psuedo_Ngateroute.y, nm = 10)
             multiplier << straight_route(pdk,gate_S_port,psuedo_Ngateroute)
         # place route met: gate
-        gate_width = gate_S_port.center[0] - multiplier.ports["row0_col0_gate_S"].center[0] + gate_S_port.width
-        gate = rename_ports_by_list(via_array(pdk,"poly",gate_route_topmet, size=(gate_width,None),num_vias=(None,gate_rmult), no_exception=True, fullbottom=True),[("top_met_","gate_")])
-        gate_ref = align_comp_to_port(gate.copy(), psuedo_Ngateroute, alignment=(None,'b'),layer=pdk.get_glayer("poly"))
+        
+        gate_width = gate_S_port.dcenter[0] - multiplier.ports["row0_col0_gate_S"].dcenter[0] + gate_S_port.dwidth
+        gate = rename_ports_by_list(via_array(pdk,"poly",gate_route_topmet, size=(snap_to_grid(gate_width, nm = 10),None),num_vias=(None,gate_rmult), no_exception=True, fullbottom=True),[("top_met_","gate_")])
+        gate_ref = align_comp_to_port(gate, psuedo_Ngateroute, alignment=(None,'b'),layer=pdk.get_glayer("poly"))
         multiplier.add(gate_ref)
         # place route met: source, drain
-        sd_width = sdvia_ports[-1].center[0] - sdvia_ports[0].center[0]
+        
+        sd_width = snap_to_grid(sdvia_ports[-1].dcenter[0] - sdvia_ports[0].dcenter[0], nm = 10)
+        sdmet_height = snap_to_grid(sdmet_hieght, nm = 10)
         sd_route = rectangle(size=(sd_width,sdmet_hieght),layer=pdk.get_glayer(sd_route_topmet),centered=True)
         source = align_comp_to_port(sd_route.copy(), sdvia_ports[0], alignment=(None,'c'))
         drain = align_comp_to_port(sd_route.copy(), sdvia_ports[2], alignment=(None,'c'))
         multiplier.add(source)
         multiplier.add(drain)
         # add ports
-        multiplier.add_ports(drain.get_ports_list(), prefix="drain_")
-        multiplier.add_ports(source.get_ports_list(), prefix="source_")
-        multiplier.add_ports(gate_ref.get_ports_list(prefix="gate_"))
+        # import pdb; pdb.set_trace()
+        multiplier.add_ports(drain.ports, prefix="drain_")
+        multiplier.add_ports(source.ports, prefix="source_")
+        multiplier.add_ports(gate_ref.ports.filter(regex="gate_"))
     # create dummy regions
     if isinstance(dummy, bool):
         dummyl = dummyr = dummy
     else:
         dummyl, dummyr = dummy
     if dummyl or dummyr:
-        dummy = __gen_fingers_macro(pdk,rmult=interfinger_rmult,fingers=1,length=length,width=width,poly_height=poly_height,sdlayer=sdlayer,inter_finger_topmet="met1")
+        
+        dummy = __gen_fingers_macro(pdk,rmult=interfinger_rmult,fingers=1,length=length,width=width,poly_height=poly_height,sdlayer=sdlayer,inter_finger_topmet="met1", finger_cell_name = "dummy_finer")
         dummyvia = dummy << via_stack(pdk,"poly","met1",fullbottom=True)
-        align_comp_to_port(dummyvia,dummy.ports["row0_col0_gate_S"],layer=pdk.get_glayer("poly"))
-        dummy << L_route(pdk,dummyvia.ports["top_met_W"],dummy.ports["leftsd_top_met_S"])
-        dummy << L_route(pdk,dummyvia.ports["top_met_E"],dummy.ports["row0_col0_rightsd_top_met_S"])
-        dummy.add_ports(dummyvia.get_ports_list(),prefix="gsdcon_")
-        dummy_space = pdk.get_grule(sdlayer)["min_separation"] + dummy.xmax
+        dport =  init_hashport(dummy.ports["row0_col0_gate_S"], layer_overload = pdk.get_glayer("poly"))
+        align_comp_to_port(dummyvia,dport,layer=pdk.get_glayer("poly"))
+        dvia_port0 = init_hashport(dummyvia.ports["top_met_W"], layer_overload = pdk.get_glayer("met1"))
+        dvia_port1 = init_hashport(dummyvia.ports["top_met_E"], layer_overload = pdk.get_glayer("met1"))
+        dvia_port2 = init_hashport(dummy.ports["leftsd_top_met_S"], layer_overload = pdk.get_glayer("met1"))
+        dvia_port3 = init_hashport(dummy.ports["row0_col0_rightsd_top_met_S"], layer_overload = pdk.get_glayer("met1"))
+        dummy << L_route(pdk,dvia_port0,dvia_port2)
+        dummy << L_route(pdk,dvia_port1,dvia_port3)
+        dummy.add_ports(dummyvia.ports,prefix="gsdcon_")
+        dummy_space = pdk.get_grule(sdlayer)["min_separation"] + dummy.dxmax
         sides = list()
         if dummyl:
             sides.append((-1,"dummy_L_"))
@@ -249,13 +272,12 @@ def multiplier(
             sides.append((1,"dummy_R_"))
         for side, name in sides:
             dummy_ref = multiplier << dummy
-            dummy_ref.movex(side * (dummy_space + multiplier.xmax))
-            multiplier.add_ports(dummy_ref.get_ports_list(),prefix=name)
+            dummy_ref.dmovex(snap_to_grid(side * (dummy_space + multiplier.dxmax), nm = 10))
+            multiplier.add_ports(dummy_ref.ports,prefix=name)
     # ensure correct port names and return
-    return component_snap_to_grid(rename_ports_by_orientation(multiplier))
+    return component_snap_to_grid(rename_ports_by_orientation(multiplier), flatten_true = False)
 
-
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __mult_array_macro(
     pdk: MappedPDK,
     sdlayer: str,
@@ -303,38 +325,40 @@ def __mult_array_macro(
     for rownum in range(multipliers):
         row_displacment = rownum * multiplier_separation - (multiplier_separation/2 * (multipliers-1))
         row_ref = multiplier_arr << multiplier_comp
-        row_ref.movey(to_float(row_displacment))
+        row_ref.dmovey(to_float(row_displacment))
         multiplier_arr.add_ports(
-            row_ref.get_ports_list(), prefix="multiplier_" + str(rownum) + "_"
+            row_ref.ports, prefix="multiplier_" + str(rownum) + "_"
         )
     # TODO: fix extension (both extension are broken. IDK src extension and drain extension IDK metal layer)
     src_extension = to_decimal(0.6)
     drain_extension = src_extension + 3*to_decimal(pdk.get_grule("met4")["min_separation"])
     sd_side = "W" if sd_route_left else "E"
     gate_side = "E" if sd_route_left else "W"
+    # import pdb; pdb.set_trace()
+
     if routing and multipliers > 1:
         for rownum in range(multipliers-1):
             thismult = "multiplier_" + str(rownum) + "_"
             nextmult = "multiplier_" + str(rownum+1) + "_"
             # route sources left
             srcpfx = thismult + "source_"
-            this_src = multiplier_arr.ports[srcpfx+sd_side]
-            next_src = multiplier_arr.ports[nextmult + "source_"+sd_side]
+            this_src = init_hashport(multiplier_arr.ports[srcpfx+sd_side], layer_overload = pdk.get_glayer('met2'))
+            next_src = init_hashport(multiplier_arr.ports[nextmult + "source_"+sd_side], layer_overload = pdk.get_glayer('met2'))
             src_ref = multiplier_arr << c_route(pdk, this_src, next_src, viaoffset=(True,False), extension=to_float(src_extension))
-            multiplier_arr.add_ports(src_ref.get_ports_list(), prefix=srcpfx)
+            multiplier_arr.add_ports(src_ref.ports, prefix=srcpfx)
             # route drains left
             drainpfx = thismult + "drain_"
-            this_drain = multiplier_arr.ports[drainpfx+sd_side]
-            next_drain = multiplier_arr.ports[nextmult + "drain_"+sd_side]
+            this_drain = init_hashport(multiplier_arr.ports[drainpfx+sd_side], layer_overload = pdk.get_glayer('met2'))
+            next_drain = init_hashport(multiplier_arr.ports[nextmult + "drain_"+sd_side], layer_overload = pdk.get_glayer('met2'))
             drain_ref = multiplier_arr << c_route(pdk, this_drain, next_drain, viaoffset=(True,False), extension=to_float(drain_extension))
-            multiplier_arr.add_ports(drain_ref.get_ports_list(), prefix=drainpfx)
+            multiplier_arr.add_ports(drain_ref.ports, prefix=drainpfx)
             # route gates right
             gatepfx = thismult + "gate_"
-            this_gate = multiplier_arr.ports[gatepfx+gate_side]
-            next_gate = multiplier_arr.ports[nextmult + "gate_"+gate_side]
+            this_gate = init_hashport(multiplier_arr.ports[gatepfx+gate_side], layer_overload = pdk.get_glayer('met2'))
+            next_gate = init_hashport(multiplier_arr.ports[nextmult + "gate_"+gate_side], layer_overload = pdk.get_glayer('met2'))
             gate_ref = multiplier_arr << c_route(pdk, this_gate, next_gate, viaoffset=(True,False), extension=to_float(src_extension))
-            multiplier_arr.add_ports(gate_ref.get_ports_list(), prefix=gatepfx)
-    multiplier_arr = component_snap_to_grid(rename_ports_by_orientation(multiplier_arr))
+            multiplier_arr.add_ports(gate_ref.ports, prefix=gatepfx)
+    multiplier_arr = component_snap_to_grid(rename_ports_by_orientation(multiplier_arr), flatten_true = False)
     # add port redirects for shortcut names (source,drain,gate N,E,S,W)
     for pin in ["source","drain","gate"]:
         for side in ["N","E","S","W"]:
@@ -345,9 +369,9 @@ def __mult_array_macro(
     final_arr = Component()
     marrref = final_arr << multiplier_arr
     correctionxy = prec_center(marrref)
-    marrref.movex(correctionxy[0]).movey(correctionxy[1])
-    final_arr.add_ports(marrref.get_ports_list())
-    return component_snap_to_grid(rename_ports_by_orientation(final_arr))
+    marrref.dmovex(correctionxy[0]).dmovey(correctionxy[1])
+    final_arr.add_ports(marrref.ports)
+    return component_snap_to_grid(rename_ports_by_orientation(final_arr), flatten_true = False)
 
 
 #@cell
@@ -404,7 +428,8 @@ def nmos(
         gate_rmult = 1
         interfinger_rmult = ((rmult-1) or 1)
     # create and add multipliers to nfet
-    multiplier_arr = __mult_array_macro(
+    multiplier_arr = Component()
+    multiplier_arr_ref = multiplier_arr << __mult_array_macro(
         pdk,
         "n+s/d",
         width,
@@ -420,10 +445,10 @@ def nmos(
         interfinger_rmult=interfinger_rmult,
         dummy_routes=dummy_routes
     )
-    multiplier_arr_ref = multiplier_arr.ref()
     nfet.add(multiplier_arr_ref)
-    nfet.add_ports(multiplier_arr_ref.get_ports_list())
+    nfet.add_ports(multiplier_arr_ref.ports)
     # add tie if tie
+    
     if with_tie:
         tap_separation = max(
             pdk.util_max_metal_seperation(),
@@ -431,8 +456,8 @@ def nmos(
         )
         tap_separation += pdk.get_grule("p+s/d", "active_tap")["min_enclosure"]
         tap_encloses = (
-            2 * (tap_separation + nfet.xmax),
-            2 * (tap_separation + nfet.ymax),
+            2 * (tap_separation + nfet.dxmax),
+            2 * (tap_separation + nfet.dymax),
         )
         tiering_ref = nfet << tapring(
             pdk,
@@ -441,22 +466,26 @@ def nmos(
             horizontal_glayer=tie_layers[0],
             vertical_glayer=tie_layers[1],
         )
-        nfet.add_ports(tiering_ref.get_ports_list(), prefix="tie_")
+        nfet.add_ports(tiering_ref.ports, prefix="tie_")
         for row in range(multipliers):
             for dummyside,tieside in [("L","W"),("R","E")]:
                 try:
-                    nfet<<straight_route(pdk,nfet.ports[f"multiplier_{row}_dummy_{dummyside}_gsdcon_top_met_W"],nfet.ports[f"tie_{tieside}_top_met_{tieside}"],glayer2="met1")
+                    port0 = init_hashport(nfet.ports[f'multiplier_{row}_dummy_{dummyside}_gsdcon_top_met_W'], layer_overload=pdk.get_glayer("met1"))
+                    port1 = init_hashport(nfet.ports[f'tie_{tieside}_top_met_{tieside}'], layer_overload=pdk.get_glayer("met1"))
+                    nfet<<straight_route(pdk,port0,port1,glayer2="met1")
                 except KeyError:
                     pass
     # add pwell
-    nfet.add_padding(
-        layers=(pdk.get_glayer("pwell"),),
-        default=pdk.get_grule("pwell", "active_tap")["min_enclosure"],
-    )
+    nfet = add_padding(nfet, layers=(pdk.get_glayer("pwell"),), default=pdk.get_grule("pwell", "active_tap")["min_enclosure"])
+    # nfet.add_padding(
+    #     layers=(pdk.get_glayer("pwell"),),
+    #     default=pdk.get_grule("pwell", "active_tap")["min_enclosure"],
+    # )
     nfet = add_ports_perimeter(nfet,layer=pdk.get_glayer("pwell"),prefix="well_")
     # add dnwell if dnwell
     if with_dnwell:
-        nfet.add_padding(
+        nfet = add_padding(
+            nfet, 
             layers=(pdk.get_glayer("dnwell"),),
             default=pdk.get_grule("pwell", "dnwell")["min_enclosure"],
         )
@@ -466,8 +495,8 @@ def nmos(
             "min_separation"
         ]
         substrate_tap_encloses = (
-            2 * (substrate_tap_separation + nfet.xmax),
-            2 * (substrate_tap_separation + nfet.ymax),
+            2 * (substrate_tap_separation + nfet.dxmax),
+            2 * (substrate_tap_separation + nfet.dymax),
         )
         ringtoadd = tapring(
             pdk,
@@ -477,21 +506,20 @@ def nmos(
             vertical_glayer=substrate_tap_layers[1],
         )
         tapring_ref = nfet << ringtoadd
-        nfet.add_ports(tapring_ref.get_ports_list(),prefix="guardring_")
+        nfet.add_ports(tapring_ref.ports,prefix="guardring_")
 
-    component = rename_ports_by_orientation(nfet).flatten()
-
-    component.info['netlist'] = fet_netlist(
-        pdk,
-        circuit_name="NMOS",
-        model=pdk.models['nfet'],
-        width=width,
-        length=length,
-        fingers=fingers,
-        multipliers=multipliers,
-        with_dummy=with_dummy
-    )
-
+    component = rename_ports_by_orientation(nfet)
+    component_snap_to_grid(component, flatten_true=True)
+    # component.info['netlist'] = fet_netlist(
+    #     pdk,
+    #     circuit_name="NMOS",
+    #     model=pdk.models['nfet'],
+    #     width=width,
+    #     length=length,
+    #     fingers=fingers,
+    #     multipliers=multipliers,
+    #     with_dummy=with_dummy
+    # )
     return component
 
 
@@ -549,7 +577,8 @@ def pmos(
         gate_rmult = 1
         interfinger_rmult = ((rmult-1) or 1)
     # create and add multipliers to nfet
-    multiplier_arr = __mult_array_macro(
+    multiplier_arr = Component()
+    multiplier_arr_ref = multiplier_arr << __mult_array_macro(
         pdk,
         "p+s/d",
         width,
@@ -565,9 +594,8 @@ def pmos(
         sd_rmult=sd_rmult,
         dummy_routes=dummy_routes
     )
-    multiplier_arr_ref = multiplier_arr.ref()
     pfet.add(multiplier_arr_ref)
-    pfet.add_ports(multiplier_arr_ref.get_ports_list())
+    pfet.add_ports(multiplier_arr_ref.ports)
     # add tie if tie
     if with_tie:
         tap_separation = max(
@@ -577,8 +605,8 @@ def pmos(
         )
         tap_separation += pdk.get_grule("n+s/d", "active_tap")["min_enclosure"]
         tap_encloses = (
-            2 * (tap_separation + pfet.xmax),
-            2 * (tap_separation + pfet.ymax),
+            2 * (snap_to_grid((tap_separation + pfet.dxmax), nm = 10)),
+            2 * (snap_to_grid((tap_separation + pfet.dymax), nm = 10)),
         )
         tapring_ref = pfet << tapring(
             pdk,
@@ -587,16 +615,19 @@ def pmos(
             horizontal_glayer=tie_layers[0],
             vertical_glayer=tie_layers[1],
         )
-        pfet.add_ports(tapring_ref.get_ports_list(),prefix="tie_")
+        pfet.add_ports(tapring_ref.ports,prefix="tie_")
         for row in range(multipliers):
             for dummyside,tieside in [("L","W"),("R","E")]:
                 try:
-                    pfet<<straight_route(pdk,pfet.ports[f"multiplier_{row}_dummy_{dummyside}_gsdcon_top_met_W"],pfet.ports[f"tie_{tieside}_top_met_{tieside}"],glayer2="met1")
+                    port0 = init_hashport(pfet.ports[f'multiplier_{row}_dummy_{dummyside}_gsdcon_top_met_W'], layer_overload=pdk.get_glayer("met1"))
+                    port1 = init_hashport(pfet.ports[f'tie_{tieside}_top_met_{tieside}'], layer_overload=pdk.get_glayer("met1"))
+                    pfet<<straight_route(pdk,port0,port1,glayer2="met1")
                 except KeyError:
                     pass
     # add nwell
     nwell_glayer = "dnwell" if dnwell else "nwell"
-    pfet.add_padding(
+    pfet = add_padding(
+        pfet,
         layers=(pdk.get_glayer(nwell_glayer),),
         default=pdk.get_grule("active_tap", nwell_glayer)["min_enclosure"],
     )
@@ -607,8 +638,8 @@ def pmos(
             "min_separation"
         ]
         substrate_tap_encloses = (
-            2 * (substrate_tap_separation + pfet.xmax),
-            2 * (substrate_tap_separation + pfet.ymax),
+            2 * (snap_to_grid((substrate_tap_separation + pfet.dxmax), nm = 10)),
+            2 * (snap_to_grid((substrate_tap_separation + pfet.dymax), nm = 10))
         )
         pfet << tapring(
             pdk,
@@ -617,18 +648,19 @@ def pmos(
             horizontal_glayer=substrate_tap_layers[0],
             vertical_glayer=substrate_tap_layers[1],
         )
-    component =  rename_ports_by_orientation(pfet).flatten()
+    component =  rename_ports_by_orientation(pfet)
+    component.flatten()
 
-    component.info['netlist'] = fet_netlist(
-        pdk,
-        circuit_name="PMOS",
-        model=pdk.models['pfet'],
-        width=width,
-        length=length,
-        fingers=fingers,
-        multipliers=multipliers,
-        with_dummy=with_dummy
-    )
+    # component.info['netlist'] = fet_netlist(
+    #     pdk,
+    #     circuit_name="PMOS",
+    #     model=pdk.models['pfet'],
+    #     width=width,
+    #     length=length,
+    #     fingers=fingers,
+    #     multipliers=multipliers,
+    #     with_dummy=with_dummy
+    # )
 
     return component
 

@@ -1,4 +1,4 @@
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 from gdsfactory.component import Component, copy
 from gdsfactory.component_reference import ComponentReference
 from gdsfactory.components.rectangle import rectangle
@@ -22,7 +22,7 @@ from glayout.flow.spice import Netlist
 
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __create_sharedgatecomps(pdk: MappedPDK, rmult: int, half_pload: tuple[float,float,int]) -> tuple:
     # add diffpair current mirror loads (this is a pmos current mirror split into 2 for better matching/compensation)
     shared_gate_comps = Component("shared gate components")

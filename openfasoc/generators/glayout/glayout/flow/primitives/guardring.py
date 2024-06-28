@@ -1,15 +1,16 @@
 from glayout.flow.pdk.mappedpdk import MappedPDK
-from gdsfactory.cell import cell
+from gdsfactory import cell
 from gdsfactory.component import Component
 from gdsfactory.components.rectangle import rectangle
-from gdsfactory.components.rectangular_ring import rectangular_ring
+# from gdsfactory.components.rectangular_ring import rectangular_ring
+from glayout.flow.pdk.util.comp_utils import create_rectangular_ring
 from glayout.flow.primitives.via_gen import via_array, via_stack
 from typing import Optional
 from glayout.flow.pdk.util.comp_utils import to_decimal, to_float, evaluate_bbox
 from glayout.flow.pdk.util.port_utils import print_ports
 from glayout.flow.pdk.util.snap_to_grid import component_snap_to_grid
 from glayout.flow.routing.L_route import L_route
-
+from glayout.flow.routing.hashport import HPort, init_hashport
 
 #@cell
 def tapring(
@@ -43,6 +44,7 @@ def tapring(
     )
     pdk.activate()
     ptapring = Component()
+    
     if not "met" in horizontal_glayer or not "met" in vertical_glayer:
         raise ValueError("both horizontal and vertical glayers should be metals")
     # check that ring is not too small
@@ -55,9 +57,9 @@ def tapring(
         2 * pdk.get_grule("active_tap", "mcon")["min_enclosure"]
         + pdk.get_grule("mcon")["width"],
     )
-    ptapring << rectangular_ring(
-        enclosed_size=enclosed_rectangle,
-        width=tap_width,
+    ptapring << create_rectangular_ring(
+        enclosed_rectangle=enclosed_rectangle,
+        ring_width=tap_width,
         centered=True,
         layer=pdk.get_glayer("active_tap"),
     )
@@ -65,9 +67,9 @@ def tapring(
     pp_enclosure = pdk.get_grule("active_tap", sdlayer)["min_enclosure"]
     pp_width = 2 * pp_enclosure + tap_width
     pp_enclosed_rectangle = [dim - 2 * pp_enclosure for dim in enclosed_rectangle]
-    ptapring << rectangular_ring(
-        enclosed_size=pp_enclosed_rectangle,
-        width=pp_width,
+    ptapring << create_rectangular_ring(
+        enclosed_rectangle=pp_enclosed_rectangle,
+        ring_width=pp_width,
         centered=True,
         layer=pdk.get_glayer(sdlayer),
     )
@@ -82,6 +84,9 @@ def tapring(
         minus1=True,
         lay_every_layer=True
     )
+    # import pdb; pdb.set_trace()
+    
+    horizontal_arr.write_gds("intermediate.gds")
     via_width_vertical = evaluate_bbox(via_stack(pdk, "active_tap", vertical_glayer))[1]
     arr_size_vertical = enclosed_rectangle[1]
     vertical_arr = via_array(
@@ -96,36 +101,48 @@ def tapring(
     refs_prefixes = list()
     if sides[1]:
         metal_ref_n = ptapring << horizontal_arr
-        metal_ref_n.movey(round(0.5 * (enclosed_rectangle[1] + tap_width),4))
+        metal_ref_n.dmovey(round(0.5 * (enclosed_rectangle[1] + tap_width),4))
         refs_prefixes.append((metal_ref_n,"N_"))
     if sides[2]:
         metal_ref_e = ptapring << vertical_arr
-        metal_ref_e.movex(round(0.5 * (enclosed_rectangle[0] + tap_width),4))
+        metal_ref_e.dmovex(round(0.5 * (enclosed_rectangle[0] + tap_width),4))
         refs_prefixes.append((metal_ref_e,"E_"))
     if sides[3]:
         metal_ref_s = ptapring << horizontal_arr
-        metal_ref_s.movey(round(-0.5 * (enclosed_rectangle[1] + tap_width),4))
+        metal_ref_s.dmovey(round(-0.5 * (enclosed_rectangle[1] + tap_width),4))
         refs_prefixes.append((metal_ref_s,"S_"))
     if sides[0]:
         metal_ref_w = ptapring << vertical_arr
-        metal_ref_w.movex(round(-0.5 * (enclosed_rectangle[0] + tap_width),4))
+        metal_ref_w.dmovex(round(-0.5 * (enclosed_rectangle[0] + tap_width),4))
         refs_prefixes.append((metal_ref_w,"W_"))
     # connect vertices
+    # import pdb; pdb.set_trace()
+    layer0 = pdk.get_glayer(horizontal_glayer)
+    layer1 = pdk.get_glayer(vertical_glayer)
     if sides[1] and sides[0]:
-        tlvia = ptapring << L_route(pdk, metal_ref_n.ports["top_met_W"], metal_ref_w.ports["top_met_N"])
+        port0 = init_hashport(metal_ref_n.ports["top_met_W"], layer_overload=layer0)
+        port1 = init_hashport(metal_ref_w.ports["top_met_N"], layer_overload=layer1)
+        tlvia = ptapring << L_route(pdk, port0, port1)
         refs_prefixes += [(tlvia,"tl_")]
     if sides[1] and sides[2]:
-        trvia = ptapring << L_route(pdk, metal_ref_n.ports["top_met_E"], metal_ref_e.ports["top_met_N"])
+        port0 = init_hashport(metal_ref_n.ports["top_met_E"], layer_overload=layer0)
+        port1 = init_hashport(metal_ref_e.ports["top_met_N"], layer_overload=layer1)
+        trvia = ptapring << L_route(pdk, port0, port1)
         refs_prefixes += [(trvia,"tr_")]
     if sides[3] and sides[0]:
-        blvia = ptapring << L_route(pdk, metal_ref_s.ports["top_met_W"], metal_ref_w.ports["top_met_S"])
+        port0 = init_hashport(metal_ref_s.ports["top_met_W"], layer_overload=layer0)
+        port1 = init_hashport(metal_ref_w.ports["top_met_S"], layer_overload=layer1)
+        blvia = ptapring << L_route(pdk, port0, port1)
         refs_prefixes += [(blvia,"bl_")]
     if sides[3] and sides[2]:
-        brvia = ptapring << L_route(pdk, metal_ref_s.ports["top_met_E"], metal_ref_e.ports["top_met_S"])
+        port0 = init_hashport(metal_ref_s.ports["top_met_E"], layer_overload=layer0)
+        port1 = init_hashport(metal_ref_e.ports["top_met_S"], layer_overload=layer1)
+        brvia = ptapring << L_route(pdk, port0, port1)
         refs_prefixes += [(brvia,"br_")]
     # add ports, flatten and return
+    # import pdb; pdb.set_trace()
     for ref_, prefix in refs_prefixes:
-        ptapring.add_ports(ref_.get_ports_list(),prefix=prefix)
+        ptapring.add_ports(ref_.ports,prefix=prefix)
     return component_snap_to_grid(ptapring)
 
 

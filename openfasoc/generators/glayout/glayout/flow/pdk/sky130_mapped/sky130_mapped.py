@@ -63,6 +63,7 @@ sky130_mapped_pdk = MappedPDK(
     default_decorator=sky130_add_npc
 )
 # set the grid size
-sky130_mapped_pdk.gds_write_settings.precision = 5*10**-9
-sky130_mapped_pdk.cell_decorator_settings.cache=False
-sky130_mapped_pdk.gds_write_settings.flatten_invalid_refs=False
+sky130_mapped_pdk
+# sky130_mapped_pdk.gds_write_settings.precision = 5*10**-9
+# sky130_mapped_pdk.cell_decorator_settings.cache=False
+# sky130_mapped_pdk.gds_write_settings.flatten_invalid_refs=False

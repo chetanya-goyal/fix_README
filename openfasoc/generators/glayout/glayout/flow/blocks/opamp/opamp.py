@@ -1,4 +1,4 @@
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 from gdsfactory.component import Component, copy
 from gdsfactory.component_reference import ComponentReference
 from gdsfactory.components.rectangle import rectangle
@@ -43,7 +43,7 @@ def opamp_output_stage_netlist(pdk: MappedPDK, output_amp_fet_ref: ComponentRefe
 
     return output_stage_netlist
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __add_output_stage(
     pdk: MappedPDK,
     opamp_top: Component,

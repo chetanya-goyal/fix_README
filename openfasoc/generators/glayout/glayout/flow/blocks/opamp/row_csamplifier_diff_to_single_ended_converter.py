@@ -1,4 +1,4 @@
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 from gdsfactory.component import Component, copy
 from gdsfactory.component_reference import ComponentReference
 from gdsfactory.components.rectangle import rectangle

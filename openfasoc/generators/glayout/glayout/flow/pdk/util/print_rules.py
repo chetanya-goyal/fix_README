@@ -84,7 +84,7 @@ def create_ruledeck_python_dictionary_definition(csvtoread: Path):
     return output
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def visualize_ruleset(ruleset: dict):
     """use networkx to print a visual of the ruleset graph
     nodes are glayers (strings)

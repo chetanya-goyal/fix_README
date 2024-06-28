@@ -14,6 +14,7 @@ from decimal import Decimal
 from pydantic import validate_arguments
 import xml.etree.ElementTree as ET
 import pathlib, shutil, os, sys
+import kfactory as kf
 
 class SetupPDKFiles:
     """Class to setup the PDK files required for DRC and LVS checks.
@@ -250,6 +251,30 @@ class MappedPDK(Pdk):
     grules: dict[StrictStr, dict[StrictStr, Optional[dict[StrictStr, Any]]]]
     pdk_files: dict[StrictStr, Union[PathType, None]]
 
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return NotImplemented
+        return self.__dict__ == other.__dict__
+    
+    def __hash__(self):
+        def recursive_hashable(item):
+            if isinstance(item, (list, tuple)):
+                # Converts each element in the list or tuple to a hashable form and makes a tuple
+                return tuple(recursive_hashable(x) for x in item)
+            elif isinstance(item, dict):
+                # Converts each key-value pair in the dictionary to a tuple of tuples after sorting by key
+                return tuple(sorted((k, recursive_hashable(v)) for k, v in item.items()))
+            elif isinstance(item, set):
+                # Converts the set to a sorted tuple to ensure order
+                return tuple(sorted(recursive_hashable(x) for x in item))
+            else:
+                return item
+
+        # Sort the object's dictionary keys and apply the recursive hashable function to the values
+        items = tuple(sorted((k, recursive_hashable(v)) for k, v in self.__dict__.items()))
+        # Use the hash function, which returns an integer
+        return hash(items)
+    
     @validator("models")
     def models_check(cls, models_obj: dict[StrictStr, StrictStr]):
         for model in models_obj.keys():
@@ -271,7 +296,7 @@ class MappedPDK(Pdk):
                 )
         return glayers_obj
 
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def drc(
         self,
         layout: Component | PathType,
@@ -340,7 +365,7 @@ class MappedPDK(Pdk):
         drc_error_count = len(drc_root[7])
         return (drc_error_count == 0)
 
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def drc_magic(
         self, 
         layout: Component | PathType, 
@@ -523,7 +548,7 @@ custom_drc_save_report $::env(DESIGN_NAME) $::env(REPORTS_DIR)/$::env(DESIGN_NAM
 
         return ret_dict
 
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def lvs_netgen(
         self,
         layout: Component | PathType, 
@@ -783,7 +808,7 @@ exit
         return {'magic_subproc_code': magic_subproc_code, 'netgen_subproc_code': netgen_subproc_code, 'result_str': result_str}
                     
     
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def has_required_glayers(self, layers_required: list[str]):
         """Raises ValueError if any of the generic layers in layers_required: list[str]
         are not mapped to anything in the pdk.glayers dictionary
@@ -799,7 +824,7 @@ exit
                 raise TypeError("glayer mapped value should be str or tuple[int,int]")
 
 
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def layer_to_glayer(self, layer: tuple[int, int]) -> str:
         """if layer provided corresponds to a glayer, will return a glayer
         else will raise an exception
@@ -824,7 +849,7 @@ exit
             raise ValueError("layer might not be a layer present in the pdk")
 
     # TODO: implement LayerSpec type
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def get_glayer(self, layer: str) -> Layer:
         """Returns the pdk layer from the generic layer name"""
         direct_mapping = self.glayers[layer]
@@ -833,7 +858,7 @@ exit
         else:
             return self.get_layer(direct_mapping)
 
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def get_grule(
         self, glayer1: str, glayer2: Optional[str] = None, return_decimal = False
     ) -> dict[StrictStr, Union[float,Decimal]]:
@@ -912,7 +937,7 @@ exit
         return mappedpdk
 
     # util methods
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def util_max_metal_seperation(self, metal_levels: Union[list[int],list[str], str, int] = range(1,6)) -> float:
         """returns the maximum of the min_seperation rule for all layers specfied
         although the name of this function is util_max_metal_seperation, layers do not have to be metals
@@ -933,7 +958,7 @@ exit
             sep_rules.append(self.get_grule(met)["min_separation"])
         return self.snap_to_2xgrid(max(sep_rules))
 
-    @validate_arguments
+    @validate_arguments(config=dict(arbitrary_types_allowed=True))
     def snap_to_2xgrid(self, dims: Union[list[Union[float,Decimal]], Union[float,Decimal]], return_type: Literal["decimal","float","same"]="float", snap4: bool=False) -> Union[list[Union[float,Decimal]], Union[float,Decimal]]:
         """snap all numbers in dims to double the grid size.
         This is useful when a generator accepts a size or dimension argument
@@ -946,8 +971,9 @@ exit
         dims = dims if isinstance(dims, Iterable) else [dims]
         dimtype_in = type(dims[0])
         dims = [Decimal(str(dim)) for dim in dims] # process in decimals
-        grid = 2 * Decimal(str(self.grid_size))
-        grid = grid if grid else Decimal('0.001')
+        grid = None
+        # grid = 2 * Decimal(str(self.grid_size))
+        grid = grid if grid else Decimal(kf.kcl.dbu)
         grid = 2*grid if snap4 else grid
         # snap dims to grid
         snapped_dims = list()

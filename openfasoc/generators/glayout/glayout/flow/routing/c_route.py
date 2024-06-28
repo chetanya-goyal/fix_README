@@ -1,6 +1,6 @@
-from gdsfactory.cell import cell
+from gdsfactory import cell
 from gdsfactory.component import Component
-from gdsfactory.port import Port
+from glayout.flow.routing.hashport import HPort, init_hashport
 from glayout.flow.pdk.mappedpdk import MappedPDK
 from typing import Optional, Union
 from math import isclose
@@ -11,22 +11,23 @@ from glayout.flow.pdk.util.comp_utils import evaluate_bbox, get_primitive_rectan
 from glayout.flow.pdk.util.port_utils import add_ports_perimeter, rename_ports_by_orientation, rename_ports_by_list, print_ports, set_port_width, set_port_orientation, get_orientation
 from pydantic import validate_arguments
 from gdsfactory.snap import snap_to_grid
+from gdsfactory import get_layer
 
-
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __fill_empty_viastack__macro(pdk: MappedPDK, glayer: str, size: Optional[tuple[float,float]]=None) -> Component:
 	"""returns a rectangle with ports that pretend to be viastack ports
 	by default creates a rectangle with size double the min width of the glayer"""
 	if size is None:
 		size = pdk.snap_to_2xgrid([2*pdk.get_grule(glayer)["min_width"],2*pdk.get_grule(glayer)["min_width"]])
 	comp = rectangle(size=size,layer=pdk.get_glayer(glayer),centered=True)
-	return rename_ports_by_orientation(rename_ports_by_list(comp,replace_list=[("e","top_met_")])).flatten()
+	comp = rename_ports_by_orientation(rename_ports_by_list(comp,replace_list=[("e","top_met_")]))
+	return comp
 
-@cell
+@cell(check_ports=False)
 def c_route(
 	pdk: MappedPDK, 
-	edge1: Port, 
-	edge2: Port, 
+	edge1: HPort, 
+	edge2: HPort, 
 	extension: Optional[float]=0.5, 
 	width1: Optional[float] = None, 
 	width2: Optional[float] = None,
@@ -63,14 +64,13 @@ def c_route(
 	"""
 	if debug:
 		pass
-		#import pdb; pdb.set_trace()
 	# error checking and figure out args
 	if round(edge1.orientation) % 90 or round(edge2.orientation) % 90:
 		raise ValueError("Ports must be vertical or horizontal")
 	if not isclose(edge1.orientation,edge2.orientation):
 		raise ValueError("Ports must be parralel and have same orientation")
-	width1 = width1 if width1 else edge1.width
-	width2 = width2 if width2 else edge1.width
+	width1 = width1 if width1 else edge1.dwidth
+	width2 = width2 if width2 else edge1.dwidth
 	e1glayer = e1glayer if e1glayer else pdk.layer_to_glayer(edge1.layer)
 	e2glayer = e2glayer if e2glayer else pdk.layer_to_glayer(edge2.layer)
 	eglayer_plusone = "met" + str(int(e1glayer[-1])+1)
@@ -97,33 +97,33 @@ def c_route(
 	# find extension
 	e1_length = snap_to_grid(extension + evaluate_bbox(viastack1)[0])
 	e2_length = snap_to_grid(extension + evaluate_bbox(viastack2)[0])
-	xdiff = snap_to_grid(abs(edge1.center[0] - edge2.center[0]))
-	ydiff = snap_to_grid(abs(edge1.center[1] - edge2.center[1]))
-	if not isclose(edge1.center[0],edge2.center[0]):
+	xdiff = snap_to_grid(abs(edge1.dcenter[0] - edge2.dcenter[0]))
+	ydiff = snap_to_grid(abs(edge1.dcenter[1] - edge2.dcenter[1]))
+	if not isclose(edge1.dcenter[0],edge2.dcenter[0]):
 		if round(edge1.orientation) == 0:# facing east
-			if edge1.center[0] > edge2.center[0]:
+			if edge1.dcenter[0] > edge2.dcenter[0]:
 				e2_length += xdiff
 			else:
 				e1_length += xdiff
 		elif round(edge1.orientation) == 180:# facing west
-			if edge1.center[0] < edge2.center[0]:
+			if edge1.dcenter[0] < edge2.dcenter[0]:
 				e2_length += xdiff
 			else:
 				e1_length += xdiff
-	if not isclose(edge1.center[1],edge2.center[1]):
+	if not isclose(edge1.dcenter[1],edge2.dcenter[1]):
 		if round(edge1.orientation) == 270:# facing south
-			if edge1.center[1] < edge2.center[1]:
+			if edge1.dcenter[1] < edge2.dcenter[1]:
 				e2_length += ydiff
 			else:
 				e1_length += ydiff
 		elif round(edge1.orientation) == 90:#facing north
-			if edge1.center[1] > edge2.center[1]:
+			if edge1.dcenter[1] > edge2.dcenter[1]:
 				e2_length += ydiff
 			else:
 				e1_length += ydiff
 	# move into position
-	e1_extension_comp = Component("edge1 extension")
-	e2_extension_comp = Component("edge2 extension")
+	e1_extension_comp = Component()
+	e2_extension_comp = Component()
 	box_dims = [(e1_length, width1),(e2_length, width2)]
 	if round(edge1.orientation) == 90 or round(edge1.orientation) == 270:
 		box_dims = [(width1, e1_length),(width2, e2_length)]
@@ -134,27 +134,27 @@ def c_route(
 	# TODO: make sure ports match bbox
 	e1_extension = e1_extension_comp << rect_c1
 	e2_extension = e2_extension_comp << rect_c2
-	e1_extension.move(destination=edge1.center)
-	e2_extension.move(destination=edge2.center)
+	e1_extension.dmove(origin = (0,0), destination=edge1.dcenter)
+	e2_extension.dmove(origin = (0,0), destination=edge2.dcenter)
 	if round(edge1.orientation) == 0:# facing east
-		e1_extension.movey(0-evaluate_bbox(e1_extension)[1]/2)
-		e2_extension.movey(0-evaluate_bbox(e2_extension)[1]/2)
+		e1_extension.dmovey(origin = 0, destination = 0-evaluate_bbox(e1_extension)[1]/2)
+		e2_extension.dmovey(origin = 0, destination = 0-evaluate_bbox(e2_extension)[1]/2)
 	elif round(edge1.orientation) == 180:# facing west
-		e1_extension.movex(0-evaluate_bbox(e1_extension)[0])
-		e2_extension.movex(0-evaluate_bbox(e2_extension)[0])
-		e1_extension.movey(0-evaluate_bbox(e1_extension)[1]/2)
-		e2_extension.movey(0-evaluate_bbox(e2_extension)[1]/2)
+		e1_extension.dmovex(origin = 0, destination = 0-evaluate_bbox(e1_extension)[0])
+		e2_extension.dmovex(origin = 0, destination = 0-evaluate_bbox(e2_extension)[0])
+		e1_extension.dmovey(origin = 0, destination = 0-evaluate_bbox(e1_extension)[1]/2)
+		e2_extension.dmovey(origin = 0, destination = 0-evaluate_bbox(e2_extension)[1]/2)
 	elif round(edge1.orientation) == 270:# facing south
-		e1_extension.movex(0-evaluate_bbox(e1_extension)[0]/2)
-		e2_extension.movex(0-evaluate_bbox(e2_extension)[0]/2)
-		e1_extension.movey(0-evaluate_bbox(e1_extension)[1])
-		e2_extension.movey(0-evaluate_bbox(e2_extension)[1])
+		e1_extension.dmovex(origin = 0, destination = 0-evaluate_bbox(e1_extension)[0]/2)
+		e2_extension.dmovex(origin = 0, destination = 0-evaluate_bbox(e2_extension)[0]/2)
+		e1_extension.dmovey(origin = 0, destination = 0-evaluate_bbox(e1_extension)[1])
+		e2_extension.dmovey(origin = 0, destination = 0-evaluate_bbox(e2_extension)[1])
 	else:#facing north
-		e1_extension.movex(0-evaluate_bbox(e1_extension)[0]/2)
-		e2_extension.movex(0-evaluate_bbox(e2_extension)[0]/2)
+		e1_extension.dmovex(origin = 0, destination = 0-evaluate_bbox(e1_extension)[0]/2)
+		e2_extension.dmovex(origin = 0, destination = 0-evaluate_bbox(e2_extension)[0]/2)
 	# place viastacks
-	e1_extension_comp.add_ports(e1_extension.get_ports_list())
-	e2_extension_comp.add_ports(e2_extension.get_ports_list())
+	e1_extension_comp.add_ports(e1_extension.ports)
+	e2_extension_comp.add_ports(e2_extension.ports)
 	me1 = e1_extension_comp << viastack1
 	me2 = e2_extension_comp << viastack2
 	route_ports = [None,None]
@@ -164,62 +164,72 @@ def c_route(
 	via_flush2 = via_flush if viaoffset[1] else 0-via_flush
 	via_flush2 = 0 if viaoffset[1] is None else via_flush2
 	if round(edge1.orientation) == 0:# facing east
-		me1.move(destination=e1_extension.ports["e_E"].center)
-		me2.move(destination=e2_extension.ports["e_E"].center)
-		via_flush *= 1 if me1.ymax > me2.ymax else -1
-		me1.movex(0-viastack1.xmax).movey(0-via_flush1)
-		me2.movex(0-viastack2.xmax).movey(via_flush2)
-		me1, me2 = (me1, me2) if (me1.origin[1] > me2.origin[1]) else (me2, me1)
-		route_ports = [me1.ports["top_met_N"],me2.ports["top_met_S"]]
+		me1.dmove(origin = (0,0), destination=e1_extension.ports["e_E"].dcenter)
+		me2.dmove(origin = (0,0), destination=e2_extension.ports["e_E"].dcenter)
+		via_flush *= 1 if me1.dymax > me2.dymax else -1
+		me1.dmovex(origin = 0, destination = 0-viastack1.dxmax).dmovey(origin = 0, destination = 0-via_flush1)
+		me2.dmovex(origin = 0, destination = 0-viastack2.dxmax).dmovey(origin = 0, destination = via_flush2)
+		me1, me2 = (me1, me2) if (me1.dcenter.y > me2.dcenter.y) else (me2, me1)
+		route_ports = [init_hashport(me1.ports["top_met_N"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_S"], layer_overload = pdk.get_glayer('met3'))]
 		fix_connection_direction = "E"
-		fix_ports = [me1.ports["top_met_E"],me2.ports["top_met_E"]]
+		fix_ports = [init_hashport(me1.ports["top_met_E"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_E"], layer_overload = pdk.get_glayer('met3'))]
 	elif round(edge1.orientation) == 180:# facing west
-		me1.move(destination=e1_extension.ports["e_W"].center)
-		me2.move(destination=e2_extension.ports["e_W"].center)
-		via_flush *= 1 if me1.ymax > me2.ymax else -1
-		me1.movex(viastack1.xmax).movey(0-via_flush1)
-		me2.movex(viastack2.xmax).movey(via_flush2)
-		me1, me2 = (me1, me2) if (me1.origin[1] > me2.origin[1]) else (me2, me1)
-		route_ports = [me1.ports["top_met_N"],me2.ports["top_met_S"]]
+		me1.dmove(origin = (0,0), destination=e1_extension.ports["e_W"].dcenter)
+		me2.dmove(origin = (0,0), destination=e2_extension.ports["e_W"].dcenter)
+		via_flush *= 1 if me1.dymax > me2.dymax else -1
+		me1.dmovex(origin = 0, destination = viastack1.dxmax).dmovey(origin = 0, destination = 0-via_flush1)
+		me2.dmovex(origin = 0, destination = viastack2.dxmax).dmovey(origin = 0, destination = via_flush2)
+		me1, me2 = (me1, me2) if (me1.dcenter.y > me2.dcenter.y) else (me2, me1)
+		route_ports = [init_hashport(me1.ports["top_met_N"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_S"], layer_overload = pdk.get_glayer('met3'))]
 		fix_connection_direction = "E"
-		fix_ports = [me1.ports["top_met_E"],me2.ports["top_met_E"]]
+		fix_ports = [init_hashport(me1.ports["top_met_E"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_E"], layer_overload = pdk.get_glayer('met3'))]
 	elif round(edge1.orientation) == 270:# facing south
-		me1.move(destination=e1_extension.ports["e_S"].center)
-		me2.move(destination=e2_extension.ports["e_S"].center)
-		via_flush *= 1 if me1.xmax > me2.xmax else -1
-		me1.movey(viastack1.xmax).movex(0-via_flush1)
-		me2.movey(viastack2.xmax).movex(via_flush2)
-		me1, me2 = (me1, me2) if (me1.origin[0] > me2.origin[0]) else (me2, me1)
-		route_ports = [me1.ports["top_met_E"],me2.ports["top_met_W"]]
+		me1.dmove(origin = (0,0), destination=e1_extension.ports["e_S"].dcenter)
+		me2.dmove(origin = (0,0), destination=e2_extension.ports["e_S"].dcenter)
+		via_flush *= 1 if me1.dxmax > me2.dxmax else -1
+		me1.dmovey(origin = 0, destination = viastack1.dxmax).dmovex(origin = 0, destination = 0-via_flush1)
+		me2.dmovey(origin = 0, destination = viastack2.dxmax).dmovex(origin = 0, destination = via_flush2)
+		me1, me2 = (me1, me2) if (me1.dcenter.x > me2.dcenter.x) else (me2, me1)
+		route_ports = [init_hashport(me1.ports["top_met_E"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_W"], layer_overload = pdk.get_glayer('met3'))]
 		fix_connection_direction = "N"
-		fix_ports = [me1.ports["top_met_N"],me2.ports["top_met_N"]]
+		fix_ports = [init_hashport(me1.ports["top_met_N"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_N"], layer_overload = pdk.get_glayer('met3'))]
 	else:#facing north
-		me1.move(destination=e1_extension.ports["e_N"].center)
-		me2.move(destination=e2_extension.ports["e_N"].center)
-		via_flush *= 1 if me1.xmax > me2.xmax else -1
-		me1.movey(0-viastack1.xmax).movex(0-via_flush1)
-		me2.movey(0-viastack2.xmax).movex(via_flush2)
-		me1, me2 = (me1, me2) if (me1.origin[0] > me2.origin[0]) else (me2, me1)
-		route_ports = [me1.ports["top_met_E"],me2.ports["top_met_W"]]
+		me1.dmove(origin = (0,0), destination=e1_extension.ports["e_N"].dcenter)
+		me2.dmove(origin = (0,0), destination=e2_extension.ports["e_N"].dcenter)
+		via_flush *= 1 if me1.dxmax > me2.dxmax else -1
+		me1.dmovey(origin = 0, destination = 0-viastack1.dxmax).dmovex(origin = 0, destination = 0-via_flush1)
+		me2.dmovey(origin = 0, destination = 0-viastack2.dxmax).dmovex(origin = 0, destination = via_flush2)
+		me1, me2 = (me1, me2) if (me1.dcenter.x > me2.dcenter.x) else (me2, me1)
+		route_ports = [init_hashport(me1.ports["top_met_E"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_W"], layer_overload = pdk.get_glayer('met3'))]
 		fix_connection_direction = "N"
-		fix_ports = [me1.ports["top_met_N"],me2.ports["top_met_N"]]
+		fix_ports = [init_hashport(me1.ports["top_met_N"], layer_overload = pdk.get_glayer('met3')),init_hashport(me2.ports["top_met_N"], layer_overload = pdk.get_glayer('met3'))]
 	# connect extensions, add ports, return
 	croute << e1_extension_comp
 	croute << e2_extension_comp
 	if cwidth:
 		route_ports = [set_port_width(port_,cwidth) for port_ in route_ports]
-	route_ports[0].width = route_ports[1].width = max(route_ports[0].width, route_ports[1].width)
-	route_port0 = route_ports[0].copy()
-	route_port1 = route_ports[1].copy()
-	route_port0.layer = route_port1.layer = pdk.get_glayer(cglayer)
+	maxwidth = max(route_ports[0].width, route_ports[1].width)
+	# route_ports[0].dwidth = route_ports[1].dwidth = max(route_ports[0].dwidth, route_ports[1].dwidth)
+	
+	route_port0 = init_hashport(route_ports[0], width_overload=maxwidth, layer_overload=pdk.get_glayer(cglayer))
+	route_port1 = init_hashport(route_ports[1], width_overload=maxwidth, layer_overload=pdk.get_glayer(cglayer))
 	cconnection = croute << straight_route(pdk, route_port0,route_port1,glayer1=cglayer,glayer2=cglayer)
 	for _port in fix_ports:
-		port2 = cconnection.ports["route_"+fix_connection_direction]
-		port2.layer = _port.layer = pdk.get_glayer(cglayer)
-		croute << straight_route(pdk, _port, port2, glayer1=cglayer,glayer2=cglayer)
-	for i,port_to_add in enumerate(route_ports):
-		orta = get_orientation(port_to_add.orientation)
-		route_ports[i] = set_port_orientation(port_to_add, orta)
-	croute.add_ports(route_ports,prefix="con_")
-	return rename_ports_by_orientation(rename_ports_by_list(croute.flatten(), [("con_","con_")]))
+		port2 = init_hashport(cconnection.ports["route_"+fix_connection_direction], layer_overload=pdk.get_glayer(cglayer))
+		port1 = init_hashport(_port, layer_overload=pdk.get_glayer(cglayer))
+		# _port.layer = pdk.get_glayer(cglayer)
+		# print("\n\n")
+		# print(_port.name, port2.name)
+		# print("\n\n")
+		croute << straight_route(pdk, port1, port2, glayer1=cglayer,glayer2=cglayer)
+	new_port_table = []
+	orta1 = get_orientation(route_ports[0].orientation, int_only=True)
+	orta2 = get_orientation(route_ports[1].orientation, int_only=True)
+	new_port_table = [init_hashport(route_ports[0], orientation_overload=float(orta1), layer_overload=get_layer(pdk.get_glayer(cglayer)), width_overload=maxwidth),init_hashport(route_ports[1], orientation_overload=orta2, layer_overload=get_layer(pdk.get_glayer(cglayer)), width_overload=maxwidth)]
+	# for i,port_to_add in enumerate(route_ports):
+	# 	orta = get_orientation(port_to_add.orientation)
+	# 	route_ports[i] = set_port_orientation(port_to_add, orta)
+	croute.add_ports(new_port_table,prefix="con_")
+	# croute.flatten()
+	return rename_ports_by_orientation(rename_ports_by_list(croute, [("con_","con_")]))
 

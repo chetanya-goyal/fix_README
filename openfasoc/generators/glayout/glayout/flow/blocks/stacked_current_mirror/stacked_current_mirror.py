@@ -1,4 +1,4 @@
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 from gdsfactory.component import Component, copy
 from gdsfactory.component_reference import ComponentReference
 from gdsfactory.components.rectangle import rectangle
@@ -21,7 +21,7 @@ from glayout.flow.placement.two_transistor_interdigitized import two_nfet_interd
 from glayout.flow.spice import Netlist
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def stacked_nfet_current_mirror(pdk: MappedPDK, half_common_source_nbias: tuple[float, float, int, int], rmult: int, sd_route_left: bool) -> Component:
     cmirror_output = nmos(
         pdk,

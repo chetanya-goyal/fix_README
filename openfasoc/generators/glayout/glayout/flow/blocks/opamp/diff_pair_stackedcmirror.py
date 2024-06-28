@@ -1,4 +1,4 @@
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 from gdsfactory.component import Component, copy
 from gdsfactory.component_reference import ComponentReference
 from gdsfactory.components.rectangle import rectangle
@@ -25,7 +25,7 @@ from glayout.flow.blocks.differential_to_single_ended_converter import different
 from glayout.flow.blocks.opamp.row_csamplifier_diff_to_single_ended_converter import row_csamplifier_diff_to_single_ended_converter
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __add_diff_pair_and_bias(pdk: MappedPDK, toplevel_stacked: Component, half_diffpair_params: tuple[float, float, int], diffpair_bias: tuple[float, float, int], rmult: int, with_antenna_diode_on_diffinputs: int) -> Component:
     clear_cache()
     diffpair_i_ref = diff_pair_ibias(pdk, half_diffpair_params, diffpair_bias, rmult, with_antenna_diode_on_diffinputs)
@@ -36,7 +36,7 @@ def __add_diff_pair_and_bias(pdk: MappedPDK, toplevel_stacked: Component, half_d
 
     return toplevel_stacked
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __add_common_source_nbias_transistors(pdk: MappedPDK, toplevel_stacked: Component, half_common_source_nbias: tuple[float, float, int, int], rmult: int) -> Component:
     clear_cache()
     x_dim_center = toplevel_stacked.xmax
@@ -61,7 +61,7 @@ def __add_common_source_nbias_transistors(pdk: MappedPDK, toplevel_stacked: Comp
         toplevel_stacked << straight_route(pdk, toplevel_stacked.ports["commonsource_cmirror_output_"+side+"_tie_S_top_met_S"], toplevel_stacked.ports["commonsource_cmirror_ref_"+side+"_tie_N_top_met_N"])
     return toplevel_stacked
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __route_bottom_ncomps_except_drain_nbias(pdk: MappedPDK, toplevel_stacked: Component, gndpin: Union[Component,ComponentReference], halfmultn_num_mults: int) -> tuple:
     clear_cache()
     # route diff pair cmirror

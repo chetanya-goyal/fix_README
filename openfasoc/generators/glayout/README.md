@@ -89,7 +89,7 @@ Because there are less than 20 generic layers, MappedPDK requires the programmer
 
 ## PDK Agnostic Layout, Basics
 The python layout generators (known as “cell factories”, but sometimes referred to as “cells” or "components" or "component factories") are built on the MappedPDK framework. All cell factories should have the `@cell` decorator which can be imported with  
-`from gdsfactory.cell import cell`   
+`from gdsfactory import cell`   
 The MappedPDK.get_glayer and MappedPDK.get_grule methods enable the construction of DRC clean layouts programmatically. However, it is the responsibility of the Cell factory programmer to ensure that the proper rules and layer checks are executed. **The quality of the programmer is the quality of the cell.**
 ### Via Stack Generator
 The only stand alone cell (cell factory which does not call other cell factories) in the glayout package is the via stack. Cell factories generally follow a similar programming procedure, so via stack provides a good introduction to the cell factory structure.  
@@ -120,7 +120,7 @@ The most important component factory in glayout is the [multiplier](https://gith
 ## Advanced Topics
 The following topics are only neccessary if you want to code with glayout, but are not neccessary for a basic understanding of glayout.
 ### Cells and PDK.activate()
-All cell factories should be decorated with the `@cell` decorator which can be imported from gdsfactory with `from gdsfactory.cell import cell`. You must also call pdk.activate() for cells to correctly work. This is related to caching, gds/oasis write settings, default decorators, etc.
+All cell factories should be decorated with the `@cell` decorator which can be imported from gdsfactory with `from gdsfactory import cell`. You must also call pdk.activate() for cells to correctly work. This is related to caching, gds/oasis write settings, default decorators, etc.
 ### Important GDSFactory Notes and Glayout Utilities
 The GDSFactory API is extremely versatile and there are many useful features. It takes some experience to learn about all features and identify the most useful tools from GDSFactory. GDSFactory serves as the backend GDS manipulation library and as an object oriented tool kit with several useful classes including: Components, Component References, and Ports. There are also common shapes as Components in GDSFactory such as rectangles, circles, rectangular_rings, etc. To automate common tasks that do not fit into GDSFactory, Glayout includes many utility functions. The most important of these functions are also addressed here.  
 - Components are the GDSFactory implementation of GDS cells. Components contain references to other components (Component Reference). Important methods are included below.

@@ -1,6 +1,6 @@
 from gdsfactory.component import Component
-from gdsfactory.polygon import Polygon
-from gdsfactory.geometry.boolean import boolean
+# from gdsfactory import Polygon
+from gdsfactory.boolean import boolean
 
 
 def sky130_add_npc(comp: Component) -> Component:
@@ -34,7 +34,8 @@ def sky130_add_npc(comp: Component) -> Component:
 			[licon_polygonxmax + 0.1, licon_polygonymax + 0.1],
 			[licon_polygonxmin - 0.1, licon_polygonymax + 0.1],
 		]
-		npc_polygons.append(Polygon(padding_points, layer=(95,20)))
+		empty = Component()
+		npc_polygons.append(empty.add_polygon(padding_points, layer=(95,20)))
 	# determine which npc polygons should be merged 
 	# also merge them by adding a polygon over them 
 	# naive approach, n^2 complexity

@@ -14,7 +14,7 @@ from glayout.flow.routing.L_route import L_route
 from glayout.flow.routing.straight_route import straight_route
 from glayout.flow.routing.c_route import c_route
 from glayout.flow.primitives.via_gen import via_array
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 import numpy as np
 from subprocess import Popen
 from pathlib import Path

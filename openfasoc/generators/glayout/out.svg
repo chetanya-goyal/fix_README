@@ -1,0 +1,68 @@
+<?xml version='1.0' encoding='ASCII' standalone='yes'?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="580.8" height="580.8" viewBox="-29.04 -29.04 58.08 58.08">
+<defs>
+<style type="text/css">
+.l89d44 {stroke: #A1CAF1; fill: #A1CAF1; fill-opacity: 0.5;}
+.l0d0 {stroke: #F38400; fill: #F38400; fill-opacity: 0.5;}
+.l71d20 {stroke: #B3446C; fill: #B3446C; fill-opacity: 0.5;}
+.l70d20 {stroke: #F6A600; fill: #F6A600; fill-opacity: 0.5;}
+.l70d44 {stroke: #BE0032; fill: #BE0032; fill-opacity: 0.5;}
+</style>
+<g id="Unnamed_0">
+<polygon id="0x39f56e0" class="l70d20" points="-26.4,-26.4 -26.4,26.4 26.4,26.4 26.4,-26.4"/>
+<use transform="translate(0 0)" xlink:href="#rectangle_S5_5_L89_44_C_82ac4a22"/>
+<use transform="translate(0 0)" xlink:href="#via_array_Psky130_Gmet4_df18cce8"/>
+</g>
+<g id="rectangle_S5_5_L71_20_C_1038eb2d">
+<polygon id="0x39f4e00" class="l71d20" points="-25,-25 -25,25 25,25 25,-25"/>
+</g>
+<g id="rectangle_S5_5_L89_44_C_82ac4a22">
+<polygon id="0x39f53d0" class="l89d44" points="-25,-25 -25,25 25,25 25,-25"/>
+</g>
+<g id="array_Cvia_stack_Psky13_a23654b8">
+<use transform="translate(-15.6 -15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-15.6 -7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-15.6 0)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-15.6 7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-15.6 15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-7.8 -15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-7.8 -7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-7.8 0)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-7.8 7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(-7.8 15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(0 -15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(0 -7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(0 0)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(0 7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(0 15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(7.8 -15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(7.8 -7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(7.8 0)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(7.8 7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(7.8 15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(15.6 -15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(15.6 -7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(15.6 0)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(15.6 7.8)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(15.6 15.6)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+</g>
+<g id="via_stack_Psky130_Gmet4_23038bc7">
+<polygon id="0x39f4c20" class="l70d44" points="-1,-1 -1,1 1,1 1,-1"/>
+<polygon id="0x39f4cc0" class="l71d20" points="-1.7,-1.7 -1.7,1.7 1.7,1.7 1.7,-1.7"/>
+</g>
+<g id="via_array_Psky130_Gmet4_df18cce8">
+<use transform="translate(0 0)" xlink:href="#array_Cvia_stack_Psky13_a23654b8"/>
+<use transform="translate(0 0)" xlink:href="#rectangle_S5_5_L71_20_C_1038eb2d"/>
+</g>
+</defs>
+<rect x="-29.04" y="-29.04" width="58.08" height="58.08" fill="#222222" stroke="none"/>
+<g id="$$$CONTEXT_INFO$$$" transform="scale(1 -1)">
+<polygon id="0x39bfba0" class="l0d0" points="0,0 0,0 0,0 0,0"/>
+<use transform="translate(0 0)" xlink:href="#via_stack_Psky130_Gmet4_23038bc7"/>
+<use transform="translate(0 0)" xlink:href="#rectangle_S5_5_L71_20_C_1038eb2d"/>
+<use transform="translate(0 0)" xlink:href="#array_Cvia_stack_Psky13_a23654b8"/>
+<use transform="translate(0 0)" xlink:href="#via_array_Psky130_Gmet4_df18cce8"/>
+<use transform="translate(0 0)" xlink:href="#rectangle_S5_5_L89_44_C_82ac4a22"/>
+<use transform="translate(0 0)" xlink:href="#Unnamed_0"/>
+</g>
+</svg>

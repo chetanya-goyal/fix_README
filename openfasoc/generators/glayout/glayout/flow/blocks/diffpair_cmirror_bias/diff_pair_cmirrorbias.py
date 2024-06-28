@@ -1,4 +1,4 @@
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 from gdsfactory.component import Component, copy
 from gdsfactory.component_reference import ComponentReference
 from gdsfactory.components.rectangle import rectangle
@@ -73,7 +73,7 @@ def diff_pair_ibias_netlist(center_diffpair: Component, current_mirror: Componen
 
     return netlist
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def diff_pair_ibias(
     pdk: MappedPDK,
     half_diffpair_params: tuple[float, float, int],

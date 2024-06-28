@@ -7,15 +7,15 @@ from typing import Literal, Union
 from glayout.flow.pdk.util.port_utils import rename_ports_by_orientation, rename_ports_by_list, create_private_ports
 from glayout.flow.pdk.util.comp_utils import prec_ref_center
 from glayout.flow.routing.straight_route import straight_route
-from gdsfactory.functions import transformed
+from glayout.flow.pdk.util.comp_utils import transformed
 from glayout.flow.primitives.guardring import tapring
 from glayout.flow.pdk.util.port_utils import add_ports_perimeter
-from gdsfactory.cell import clear_cache
+from gdsfactory import clear_cache
 from typing import Literal
 
 #from glayout.flow.placement.two_transistor_interdigitized import two_nfet_interdigitized; from glayout.flow.pdk.sky130_mapped import sky130_mapped_pdk as pdk; biasParams=[6,2,4]; rmult=2
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def macro_two_transistor_interdigitized(
     pdk: MappedPDK,
     numcols: int,
@@ -98,7 +98,7 @@ def macro_two_transistor_interdigitized(
     return idplace
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def two_nfet_interdigitized(
     pdk: MappedPDK,
     numcols: int,
@@ -176,7 +176,7 @@ def two_nfet_interdigitized(
 
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def two_pfet_interdigitized(
     pdk: MappedPDK,
     numcols: int,

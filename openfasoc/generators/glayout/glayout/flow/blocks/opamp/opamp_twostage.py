@@ -1,4 +1,4 @@
-from gdsfactory.cell import cell, clear_cache
+from gdsfactory import cell, clear_cache
 from gdsfactory.component import Component, copy
 from gdsfactory.component_reference import ComponentReference
 from gdsfactory.components.rectangle import rectangle
@@ -27,7 +27,7 @@ from glayout.flow.blocks.opamp.diff_pair_stackedcmirror import diff_pair_stacked
 from glayout.flow.spice import Netlist
 from glayout.flow.blocks.current_mirror import current_mirror_netlist
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __create_and_route_pins(
     pdk: MappedPDK,
     opamp_top: Component,
@@ -105,7 +105,7 @@ def __create_and_route_pins(
 
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def __add_mimcap_arr(pdk: MappedPDK, opamp_top: Component, mim_cap_size, mim_cap_rows, ymin: float, n_to_p_output_route) -> tuple[Component, Netlist]:
     mim_cap_size = pdk.snap_to_2xgrid(mim_cap_size, return_type="float")
     max_metalsep = pdk.util_max_metal_seperation()

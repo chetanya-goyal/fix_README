@@ -16,7 +16,7 @@ def get_files_with_extension(directory, extension):
 	return file_list
 
 
-@validate_arguments
+@validate_arguments(config=dict(arbitrary_types_allowed=True))
 def write_component_matrix(components_dir: Union[str,Path,list]="./", xspace: float=400,yspace: float=280, rtr_comp: bool=False, write_name: str="big_gds_here.gds"):
 	"""Use the write_component_matrix function to create a matrix of many different components
 	reads the different components from all gds files in components_dir
@@ -53,7 +53,7 @@ def write_component_matrix(components_dir: Union[str,Path,list]="./", xspace: fl
 		if comp_v is None:
 			continue
 		opref = big_comp << comp_v
-		opref.movex(col_index * xspace).movey(row_index*yspace)
+		opref.dmovex(col_index * xspace).dmovey(row_index*yspace)
 		col_index += 1
 		if not col_index % col_len:
 			col_index=0

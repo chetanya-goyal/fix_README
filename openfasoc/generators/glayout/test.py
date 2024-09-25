@@ -14,18 +14,29 @@ from glayout.flow.primitives.mimcap import mimcap, mimcap_array
 from glayout.flow.primitives.fet import nmos, pmos, multiplier
 from glayout.flow.pdk.sky130_mapped import sky130_mapped_pdk as sky130
 from glayout.flow.primitives.guardring import tapring
+from glayout.flow.blocks.diff_pair import diff_pair
+from glayout.flow.placement.two_transistor_place import two_transistor_place
+from glayout.flow.placement.two_transistor_interdigitized import two_transistor_interdigitized, two_pfet_interdigitized, two_nfet_interdigitized
+from glayout.flow.placement.four_transistor_interdigitized import generic_4T_interdigitzed 
+from glayout.flow.blocks.current_mirror import current_mirror
 
-cell = nmos(sky130)
-# cell = multiplier(sky130, "n+s/d")
-# cell = via_stack(sky130, 'active_tap', 'met2', fullbottom=True)
-# cell = tapring(sky130, (5, 5), sides=(True, True, True, True))
-# cell = mimcap(sky130, (5, 5))
-# cell = mimcap_array(sky130, 5, 5, (5, 5))
-# cell = via_stack(sky130, 'met1', 'met2')
-# cell = via_array(sky130, 'met1', 'met2', (5, 5))
+# celll = nmos(sky130, multipliers=2)
+# celll = diff_pair(sky130)
+# celll = multiplier(sky130, "n+s/d")
+# celll = via_stack(sky130, 'active_tap', 'met2', fullbottom=True)
+# celll = tapring(sky130, (5, 5), sides=(True, True, True, True))
+# celll = mimcap(sky130, (5, 5))
+# celll = mimcap_array(sky130, 5, 5, (5, 5))
+# celll.write_gds()
+# celll = via_array(sky130, 'met1', 'met2', (5, 5))
+# celll = via_stack(sky130, 'met1', 'met2')
+# celll = two_transistor_interdigitized(sky130, 'pfet', 5)
+# celll = two_transistor_place(sky130, 'aba bab', (nmos, {'pdk': sky130}), (pmos, {'pdk': sky130}))
+celll = generic_4T_interdigitzed(sky130, 'nfet', 'pfet', 5)
+# celll = current_mirror(sky130, 5, 'nfet')
 
-copied = cell.copy()
-copied.name = 'idk'
-cell.write_gds('output.gds')
+# copied = cell.copy()
+# copied.name = 'idk'
+celll.write_gds('holyshit.gds')
 
-sky130.drc_magic(copied, 'idk')
+# sky130.drc_magic(copied, 'idk')

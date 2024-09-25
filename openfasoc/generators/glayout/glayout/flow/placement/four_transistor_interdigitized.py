@@ -8,6 +8,7 @@ from typing import Literal, Optional
 from gdsfactory import Component
 from glayout.flow.pdk.util.comp_utils import evaluate_bbox, movey
 from glayout.flow.primitives.guardring import tapring
+from gdsfactory.snap import snap_to_grid
 
 def generic_4T_interdigitzed(
     pdk: MappedPDK,
@@ -29,20 +30,23 @@ def generic_4T_interdigitzed(
         toprow = toplvl << two_nfet_interdigitized(pdk,numcols,with_substrate_tap=False,length=length,**top_kwargs)
     else:
         toprow = toplvl << two_pfet_interdigitized(pdk,numcols,with_substrate_tap=False,length=length,**top_kwargs)
+    toplvl.add_ports(toprow.ports,prefix="top_")
+    
     if bottom_row_device=="nfet":
         bottomrow = toplvl << two_nfet_interdigitized(pdk,numcols,with_substrate_tap=False,length=length,**bottom_kwargs)
     else:
         bottomrow = toplvl << two_pfet_interdigitized(pdk,numcols,with_substrate_tap=False,length=length,**bottom_kwargs)
+    toplvl.add_ports(bottomrow.ports,prefix="bottom_")
+
     # move
-    toprow.movey(pdk.snap_to_2xgrid((evaluate_bbox(bottomrow)[1]/2 + evaluate_bbox(toprow)[1]/2 + pdk.util_max_metal_seperation())))
+    toprow.dmovey(snap_to_grid((0.5 * (evaluate_bbox(bottomrow)[1]/2 + evaluate_bbox(toprow)[1]/2 + pdk.util_max_metal_seperation())), nm = 10))
+    bottomrow.dmovey(-1 * snap_to_grid((0.5 * (evaluate_bbox(bottomrow)[1]/2 + evaluate_bbox(toprow)[1]/2 + pdk.util_max_metal_seperation())), nm = 10))
     # add substrate tap
     if with_substrate_tap:
-        substrate_tap = tapring(pdk, enclosed_rectangle=pdk.snap_to_2xgrid(evaluate_bbox(toplvl.flatten(),padding=pdk.util_max_metal_seperation())))
-        substrate_tap_ref = toplvl << movey(substrate_tap,destination=pdk.snap_to_2xgrid(toplvl.flatten().center[1],snap4=True))
+        toplvl.flatten()
+        substrate_tap_ref = toplvl << tapring(pdk, enclosed_rectangle=snap_to_grid(evaluate_bbox(toplvl,padding=pdk.util_max_metal_seperation()), nm = 10))
     # add ports
-    toplvl.add_ports(substrate_tap_ref.get_ports_list(),prefix="substratetap_")
-    toplvl.add_ports(toprow.get_ports_list(),prefix="top_")
-    toplvl.add_ports(bottomrow.get_ports_list(),prefix="bottom_")
+    toplvl.add_ports(substrate_tap_ref.ports,prefix="substratetap_")
     # flag for smart route
     toplvl.info["route_genid"] = "four_transistor_interdigitized"
     return toplvl

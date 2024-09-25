@@ -5,15 +5,16 @@ from glayout.flow.primitives.fet import nmos, pmos, multiplier
 from glayout.flow.pdk.util.comp_utils import evaluate_bbox
 from typing import Literal, Union
 from glayout.flow.pdk.util.port_utils import rename_ports_by_orientation, rename_ports_by_list, create_private_ports
-from glayout.flow.pdk.util.comp_utils import prec_ref_center
+from glayout.flow.pdk.util.comp_utils import prec_ref_center, move, movex, movey
 from glayout.flow.routing.straight_route import straight_route
 from glayout.flow.pdk.util.comp_utils import transformed
 from glayout.flow.primitives.guardring import tapring
 from glayout.flow.pdk.util.port_utils import add_ports_perimeter
 from gdsfactory import clear_cache
 from typing import Literal
-
-#from glayout.flow.placement.two_transistor_interdigitized import two_nfet_interdigitized; from glayout.flow.pdk.sky130_mapped import sky130_mapped_pdk as pdk; biasParams=[6,2,4]; rmult=2
+from gdsfactory.snap import snap_to_grid
+from glayout.flow.routing.hashport import init_hashport
+from gdsfactory.add_padding import add_padding
 
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def macro_two_transistor_interdigitized(
@@ -46,17 +47,18 @@ def macro_two_transistor_interdigitized(
     lefttmost_devA = multiplier(**kwargs)
     kwargs["dummy"] = False
     center_devA = multiplier(**kwargs)
-    devB_sd_extension = pdk.util_max_metal_seperation() + abs(center_devA.ports["drain_N"].center[1]-center_devA.ports["diff_N"].center[1])
-    devB_gate_extension = pdk.util_max_metal_seperation() + abs(center_devA.ports["row0_col0_gate_S"].center[1]-center_devA.ports["gate_S"].center[1])
-    kwargs["sd_route_extension"] = pdk.snap_to_2xgrid(devB_sd_extension)
-    kwargs["gate_route_extension"] = pdk.snap_to_2xgrid(devB_gate_extension)
+    devB_sd_extension = pdk.util_max_metal_seperation() + abs(center_devA.ports["drain_N"].dcenter[1]-center_devA.ports["diff_N"].dcenter[1])
+    devB_gate_extension = pdk.util_max_metal_seperation() + abs(center_devA.ports["row0_col0_gate_S"].dcenter[1]-center_devA.ports["gate_S"].dcenter[1])
+    kwargs["sd_route_extension"] = snap_to_grid(0.8 * devB_sd_extension, nm = 10)
+    kwargs["gate_route_extension"] = snap_to_grid(devB_gate_extension, nm = 10)
     center_devB = multiplier(**kwargs)
     kwargs["dummy"] = (False,True) if dummy[1] else False
     rightmost_devB = multiplier(**kwargs)
+    
     # place devices
     idplace = Component()
     dims = evaluate_bbox(center_devA)
-    xdisp = pdk.snap_to_2xgrid(dims[0]+pdk.get_grule("active_diff")["min_separation"])
+    xdisp = snap_to_grid(dims[0]+pdk.get_grule("active_diff")["min_separation"], nm = 10)
     refs = list()
     for i in range(2*numcols):
         if i==0:
@@ -67,33 +69,35 @@ def macro_two_transistor_interdigitized(
             refs.append(idplace << center_devB)
         else: # not i%2 == i is even (so device A)
             refs.append(idplace << center_devA)
-        refs[-1].movex(i*(xdisp))
+        refs[-1].dmovex(snap_to_grid(i*(xdisp), nm = 10))
         devletter = "B" if i%2 else "A"
         prefix=devletter+"_"+str(int(i/2))+"_"
-        idplace.add_ports(refs[-1].get_ports_list(), prefix=prefix)
+        idplace.add_ports(refs[-1].ports, prefix=prefix)
     # extend poly layer for equal parasitics
     for i in range(2*numcols):
-        desired_end_layer = pdk.layer_to_glayer(refs[i].ports["row0_col0_rightsd_top_met_N"].layer)
-        idplace << straight_route(pdk, refs[i].ports["row0_col0_rightsd_top_met_N"],refs[-1].ports["drain_E"],glayer2=desired_end_layer)
-        idplace << straight_route(pdk, refs[i].ports["leftsd_top_met_N"],refs[-1].ports["drain_E"],glayer2=desired_end_layer)
+        desired_end_layer = 'met1'
+        # desired_end_layer = pdk.layer_to_glayer(refs[i].ports["row0_col0_rightsd_top_met_N"].layer)
+        idplace << straight_route(pdk, init_hashport(refs[i].ports["row0_col0_rightsd_top_met_N"], layer_overload=pdk.get_glayer('met1')),init_hashport(refs[-1].ports["drain_E"], layer_overload=pdk.get_glayer('met2')),glayer2=desired_end_layer, width = refs[0].ports["source_W"].dwidth * 0.8)
+        idplace << straight_route(pdk, init_hashport(refs[i].ports["leftsd_top_met_N"], layer_overload=pdk.get_glayer('met1')),init_hashport(refs[-1].ports["drain_E"], layer_overload = pdk.get_glayer('met2')),glayer2=desired_end_layer, width = refs[0].ports["source_W"].dwidth * 0.8)
         if not i%2:
             desired_gate_end_layer = "poly"
-            idplace << straight_route(pdk, refs[i].ports["row0_col0_gate_S"], refs[-1].ports["gate_E"],glayer2=desired_gate_end_layer)
+            idplace << straight_route(pdk, init_hashport(refs[i].ports["row0_col0_gate_S"], layer_overload = pdk.get_glayer('poly')), init_hashport(refs[-1].ports["gate_E"], layer_overload = pdk.get_glayer('met2')),glayer2=desired_gate_end_layer)
     # merge s/d layer for all transistors
-    idplace << straight_route(pdk, refs[0].ports["plusdoped_W"],refs[-1].ports["plusdoped_E"])
+    idplace << straight_route(pdk, init_hashport(refs[0].ports["plusdoped_W"], layer_overload = pdk.get_glayer('n+s/d')),init_hashport(refs[-1].ports["plusdoped_E"], layer_overload = pdk.get_glayer('n+s/d')))
     # create s/d/gate connections extending over entire row
-    A_src = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, refs[0].ports["source_W"], refs[-1].ports["source_E"]), [("route_","_")]))
-    B_src = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, refs[-1].ports["source_E"], refs[0].ports["source_W"]), [("route_","_")]))
-    A_drain = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, refs[0].ports["drain_W"], refs[-1].ports["drain_E"]), [("route_","_")]))
-    B_drain = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, refs[-1].ports["drain_E"], refs[0].ports["drain_W"]), [("route_","_")]))
-    A_gate = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, refs[0].ports["gate_W"], refs[-1].ports["gate_E"]), [("route_","_")]))
-    B_gate = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, refs[-1].ports["gate_E"], refs[0].ports["gate_W"]), [("route_","_")]))
+    A_src = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, init_hashport(refs[0].ports["source_W"], layer_overload = pdk.get_glayer('met2')), init_hashport(refs[-1].ports["source_E"], layer_overload=pdk.get_glayer('met2')), width = refs[0].ports["source_W"].dwidth * 0.8), [("route_","_")]))
+    B_src = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, init_hashport(refs[-1].ports["source_E"], layer_overload=pdk.get_glayer('met2')), init_hashport(refs[0].ports["source_W"], layer_overload=pdk.get_glayer('met2')),width = refs[0].ports["source_W"].dwidth * 0.8), [("route_","_")]))
+    A_drain = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, init_hashport(refs[0].ports["drain_W"], layer_overload=pdk.get_glayer('met2')), init_hashport(refs[-1].ports["drain_E"], layer_overload=pdk.get_glayer('met2')),width = refs[0].ports["source_W"].dwidth * 0.8), [("route_","_")]))
+    B_drain = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, init_hashport(refs[-1].ports["drain_E"], layer_overload=pdk.get_glayer('met2')), init_hashport(refs[0].ports["drain_W"], layer_overload=pdk.get_glayer('met2')),width = refs[0].ports["source_W"].dwidth * 0.8), [("route_","_")]))
+    A_gate = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, init_hashport(refs[0].ports["gate_W"], layer_overload=pdk.get_glayer('met2')), init_hashport(refs[-1].ports["gate_E"], layer_overload=pdk.get_glayer('met2'))), [("route_","_")]))
+    B_gate = idplace << rename_ports_by_orientation(rename_ports_by_list(straight_route(pdk, init_hashport(refs[-1].ports["gate_E"], layer_overload=pdk.get_glayer('met2')), init_hashport(refs[0].ports["gate_W"], layer_overload=pdk.get_glayer('met2'))), [("route_","_")]))
     # add route ports and return
+
     prefixes = ["A_source","B_source","A_drain","B_drain","A_gate","B_gate"]
     for i, ref in enumerate([A_src, B_src, A_drain, B_drain, A_gate, B_gate]):
-        idplace.add_ports(ref.get_ports_list(),prefix=prefixes[i])
+        idplace.add_ports(ref.ports,prefix=prefixes[i])
     idplace = transformed(prec_ref_center(idplace))
-    idplace.unlock()
+    # idplace.unlock()
     idplace.add_ports(create_private_ports(idplace, prefixes))
     return idplace
 
@@ -118,8 +122,12 @@ def two_nfet_interdigitized(
     ****NOTE: These are the same as glayout.flow.primitives.fet.multiplier arguments EXCLUDING dummy, sd_route_extension, and pdk options
     tie_layers: tuple[str,str] specifying (horizontal glayer, vertical glayer) or well tie ring. default=("met2","met1")
     """
-    base_multiplier = macro_two_transistor_interdigitized(pdk, numcols, "nfet", dummy, **kwargs)
+    base_multiplier = Component()
+    dummycomp = base_multiplier << macro_two_transistor_interdigitized(pdk, numcols, "nfet", dummy, **kwargs)
+    base_multiplier.add_ports(dummycomp.ports)
+    dummycomp.dmove(origin = (dummycomp.dcenter.x, dummycomp.dcenter.y), destination = (0, 0))
     # tie
+    
     if with_tie:
         tap_separation = max(
             pdk.util_max_metal_seperation(),
@@ -127,8 +135,8 @@ def two_nfet_interdigitized(
         )
         tap_separation += pdk.get_grule("p+s/d", "active_tap")["min_enclosure"]
         tap_encloses = (
-            2 * (tap_separation + base_multiplier.xmax),
-            2 * (tap_separation + base_multiplier.ymax),
+            snap_to_grid(2 * (tap_separation + base_multiplier.dxmax), nm = 10),
+            snap_to_grid(2 * (tap_separation + base_multiplier.dymax), nm = 10)
         )
         tiering_ref = base_multiplier << tapring(
             pdk,
@@ -137,17 +145,18 @@ def two_nfet_interdigitized(
             horizontal_glayer=tie_layers[0],
             vertical_glayer=tie_layers[1],
         )
-        base_multiplier.add_ports(tiering_ref.get_ports_list(), prefix="welltie_")
-        try:
-            base_multiplier<<straight_route(pdk,base_multiplier.ports["A_0_dummy_L_gsdcon_top_met_W"],base_multiplier.ports["welltie_W_top_met_W"],glayer2="met1")
-        except KeyError:
-            pass
-        try:
-            base_multiplier<<straight_route(pdk,base_multiplier.ports[f"B_{numcols-1}_dummy_R_gsdcon_top_met_E"],base_multiplier.ports["welltie_E_top_met_E"],glayer2="met1")
-        except KeyError:
-            pass
+        base_multiplier.add_ports(tiering_ref.ports, prefix="welltie_")
+        # try:
+        #     base_multiplier<<straight_route(pdk,init_hashport(base_multiplier.ports["A_0_dummy_L_gsdcon_top_met_W"], layer_overload = pdk.get_glayer('met1')), init_hashport(base_multiplier.ports["welltie_W_top_met_W"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
+        # except KeyError:
+        #     pass
+        # try:
+        #     base_multiplier<<straight_route(pdk,init_hashport(base_multiplier.ports[f"B_{numcols-1}_dummy_R_gsdcon_top_met_E"], layer_overload = pdk.get_glayer('met1')), init_hashport(base_multiplier.ports["welltie_E_top_met_E"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
+        # except KeyError:
+        #     pass
     # add pwell
-    base_multiplier.add_padding(
+    base_multiplier = add_padding(
+        base_multiplier,
         layers=(pdk.get_glayer("pwell"),),
         default=pdk.get_grule("pwell", "active_tap")["min_enclosure"],
     )
@@ -159,8 +168,8 @@ def two_nfet_interdigitized(
             "min_separation"
         ]
         substrate_tap_encloses = (
-            2 * (substrate_tap_separation + base_multiplier.xmax),
-            2 * (substrate_tap_separation + base_multiplier.ymax),
+            snap_to_grid(2 * (substrate_tap_separation + base_multiplier.dxmax), nm = 10),
+            snap_to_grid(2 * (substrate_tap_separation + base_multiplier.dymax), nm = 10)
         )
         ringtoadd = tapring(
             pdk,
@@ -170,7 +179,7 @@ def two_nfet_interdigitized(
             vertical_glayer="met1",
         )
         tapring_ref = base_multiplier << ringtoadd
-        base_multiplier.add_ports(tapring_ref.get_ports_list(),prefix="substratetap_")
+        base_multiplier.add_ports(tapring_ref.ports,prefix="substratetap_")
     base_multiplier.info["route_genid"] = "two_transistor_interdigitized"
     return base_multiplier
 
@@ -196,7 +205,10 @@ def two_pfet_interdigitized(
     ****NOTE: These are the same as glayout.flow.primitives.fet.multiplier arguments EXCLUDING dummy, sd_route_extension, and pdk options
     tie_layers: tuple[str,str] specifying (horizontal glayer, vertical glayer) or well tie ring. default=("met2","met1")
     """
-    base_multiplier = macro_two_transistor_interdigitized(pdk, numcols, "pfet", dummy, **kwargs)
+    base_multiplier = Component()
+    dummycomp = base_multiplier << macro_two_transistor_interdigitized(pdk, numcols, "pfet", dummy, **kwargs)
+    base_multiplier.add_ports(dummycomp.ports)
+    dummycomp.dmove(origin = (dummycomp.dcenter.x, dummycomp.dcenter.y), destination = (0, 0))
     # tie
     if with_tie:
         tap_separation = max(
@@ -205,8 +217,8 @@ def two_pfet_interdigitized(
         )
         tap_separation += pdk.get_grule("n+s/d", "active_tap")["min_enclosure"]
         tap_encloses = (
-            2 * (tap_separation + base_multiplier.xmax),
-            2 * (tap_separation + base_multiplier.ymax),
+            snap_to_grid(2 * (tap_separation + base_multiplier.dxmax), nm = 10),
+            snap_to_grid(2 * (tap_separation + base_multiplier.dymax), nm = 10)
         )
         tiering_ref = base_multiplier << tapring(
             pdk,
@@ -215,17 +227,18 @@ def two_pfet_interdigitized(
             horizontal_glayer=tie_layers[0],
             vertical_glayer=tie_layers[1],
         )
-        base_multiplier.add_ports(tiering_ref.get_ports_list(), prefix="welltie_")
-        try:
-            base_multiplier<<straight_route(pdk,base_multiplier.ports["A_0_dummy_L_gsdcon_top_met_W"],base_multiplier.ports["welltie_W_top_met_W"],glayer2="met1")
-        except KeyError:
-            pass
-        try:
-            base_multiplier<<straight_route(pdk,base_multiplier.ports[f"B_{numcols-1}_dummy_R_gsdcon_top_met_E"],base_multiplier.ports["welltie_E_top_met_E"],glayer2="met1")
-        except KeyError:
-            pass
+        base_multiplier.add_ports(tiering_ref.ports, prefix="welltie_")
+        # try:
+        #     base_multiplier<<straight_route(pdk,init_hashport(base_multiplier.ports["A_0_dummy_L_gsdcon_top_met_W"], layer_overload = pdk.get_glayer('met1')), init_hashport(base_multiplier.ports["welltie_W_top_met_W"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
+        # except KeyError:
+        #     pass
+        # try:
+        #     base_multiplier<<straight_route(pdk, init_hashport(base_multiplier.ports[f"B_{numcols-1}_dummy_R_gsdcon_top_met_E"], layer_overload = pdk.get_glayer('met1')), init_hashport(base_multiplier.ports["welltie_E_top_met_E"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
+        # except KeyError:
+        #     pass
     # add pwell
-    base_multiplier.add_padding(
+    base_multiplier = add_padding(
+        base_multiplier,
         layers=(pdk.get_glayer("nwell"),),
         default=pdk.get_grule("nwell", "active_tap")["min_enclosure"],
     )
@@ -237,8 +250,8 @@ def two_pfet_interdigitized(
             "min_separation"
         ]
         substrate_tap_encloses = (
-            2 * (substrate_tap_separation + base_multiplier.xmax),
-            2 * (substrate_tap_separation + base_multiplier.ymax),
+            snap_to_grid(2 * (substrate_tap_separation + base_multiplier.dxmax), nm = 10),
+            snap_to_grid(2 * (substrate_tap_separation + base_multiplier.dymax), nm = 10)
         )
         ringtoadd = tapring(
             pdk,
@@ -248,7 +261,7 @@ def two_pfet_interdigitized(
             vertical_glayer="met1",
         )
         tapring_ref = base_multiplier << ringtoadd
-        base_multiplier.add_ports(tapring_ref.get_ports_list(),prefix="substratetap_")
+        base_multiplier.add_ports(tapring_ref.ports,prefix="substratetap_")
     base_multiplier.info["route_genid"] = "two_transistor_interdigitized"
     return base_multiplier
 

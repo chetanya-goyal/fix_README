@@ -6,7 +6,6 @@ from gdsfactory.components import bbox
 from gdsfactory.components.rectangle import rectangle
 from glayout.flow.routing.hashport import HPort
 from gdsfactory.components import rectangle
-
 from typing import Callable, Union, Optional, Iterable
 from decimal import Decimal
 # from gdsfactory.functions import transformed
@@ -20,22 +19,21 @@ from gdsfactory.snap import snap_to_grid2x
 import kfactory as kf
 import gdsfactory as gf
 def transformed(ref: ComponentReference):
-    """Returns flattened cell with reference transformations applied.
+	"""Returns flattened cell with reference transformations applied.
 
-    Args:
-        ref: the reference to flatten into a new cell.
+	Args:
+		ref: the reference to flatten into a new cell.
 
-    """
-    # from gdsfactory.component import copy_reference
-    # import pdb; pdb.set_trace()
-    c = Component()
-    c = ref.cell.from_kcell()
-    
-    c.flatten()
-    # c.copy_child_info(ref.parent_cell)
-    c.add_ports(ref.ports)
-    c.info["transformed_cell"] = ref.parent_cell.name
-    return c
+	"""
+	# from gdsfactory.component import copy_reference
+	c = Component().from_kcell(ref.cell)
+	# c = ref.cell.from_kcell()
+	c.copy_child_info(ref.parent_cell)
+	# c.copy_child_info(ref.parent_cell)
+	c.add_ports(ref.ports)
+	c.info["transformed_cell"] = ref.parent_cell.name
+	
+	return c
 
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def evaluate_bbox(custom_comp: Union[Component, ComponentReference], return_decimal: Optional[bool]=False, padding: float=0) -> tuple[Union[float,Decimal],Union[float,Decimal]]:
@@ -313,7 +311,6 @@ def prec_center(custom_comp: Union[Component,ComponentReference], return_decimal
 	use this function which will return the correct offset to center a component
 	returns (x,y) corrections
 	if return_decimal=True, return in Decimal, otherwise return float"""
-	
 	correctmax = [dim/2 for dim in evaluate_bbox(custom_comp, True)]
 	currentmax = to_decimal((custom_comp.dxmax,custom_comp.dymax))
 	correctionxy = [correctmax[i] - currentmax[i] for i in range(2)]

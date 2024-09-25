@@ -4,6 +4,7 @@ from gdsfactory.component import Component
 from typing import Callable
 from glayout.flow.primitives.fet import nmos, pmos
 from glayout.flow.pdk.util.comp_utils import evaluate_bbox
+from gdsfactory.snap import snap_to_grid
 
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def two_transistor_place(pdk: MappedPDK, pattern: str, deviceA: tuple[Callable, dict], deviceB: tuple[Callable, dict]) -> Component:
@@ -46,6 +47,6 @@ def two_transistor_place(pdk: MappedPDK, pattern: str, deviceA: tuple[Callable, 
             tranref = toplvlcomp << tran
             ymov = i * yspace
             xmov = j * xspace * (-1**(j%2))
-            tranref.movex(xmov).movey(ymov)
-            toplvlcomp.add_ports(tranref.get_ports_list(), prefix=f"place{i}_{j}_")
+            tranref.dmovex(snap_to_grid(xmov, nm = 10)).dmovey(snap_to_grid(ymov, nm = 10))
+            toplvlcomp.add_ports(tranref.ports, prefix=f"place{i}_{j}_")
     return toplvlcomp

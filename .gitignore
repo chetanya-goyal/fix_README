@@ -151,3 +151,4 @@ cython_debug/
 # Large Language Models
 glayout_llm_checkpoints/
 
+glayout_python/

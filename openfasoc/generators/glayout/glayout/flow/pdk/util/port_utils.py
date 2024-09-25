@@ -5,11 +5,12 @@ from glayout.flow.routing.hashport import HPort, init_hashport
 from typing import Callable, Union, Optional
 from decimal import Decimal
 from pathlib import Path
+from gdsfactory.snap import snap_to_grid2x, snap_to_grid
 import pickle
 from PrettyPrint import PrettyPrintTree
 import math
 import kfactory as kf
-
+from kfactory.kcell import InstancePorts, Port
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def parse_direction(direction: Union[int, str]) -> int:
 	"""returns 1,2,3,4 (W,N,E,S)
@@ -111,6 +112,7 @@ def get_unique_ports(custom_comp: Union[Component, ComponentReference]):
 
 	return list(unique_ports.values())
 
+
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def rename_component_ports(custom_comp: Union[Component, ComponentReference], rename_function: Callable[[str, HPort], str]) -> Union[Component, ComponentReference]:
 	"""uses rename_function(str, HPort) -> str to decide which ports to rename.
@@ -120,6 +122,12 @@ def rename_component_ports(custom_comp: Union[Component, ComponentReference], re
 	if you want to pass additional args to rename_function, implement a functor
 	custom_comp is the components to modify. the modified component is returned
 	"""
+	# if type(custom_comp.ports) == type(kf.kcell.InstancePorts): 
+	# 	port_list = custom_comp.ports.cell_ports
+	# elif type(custom_comp.ports) == type(kf.kcell.Ports):
+	# 	port_list = custom_comp.ports
+	# else:
+	# 	raise ValueError('Type of ports in the component passed does not match the required type')
 	names_to_modify = list()
    
     # find ports and get new names
@@ -128,6 +136,9 @@ def rename_component_ports(custom_comp: Union[Component, ComponentReference], re
 		if not pname == pobj.name:
 			raise ValueError("component may have an invalid ports dict")
 		new_name = rename_function(pname, pobj)
+		if new_name == '':
+			# print('returnixng')
+			return custom_comp
 		names_to_modify.append((pname,new_name))
 	# modify names
 	for namepair in names_to_modify:
@@ -136,6 +147,7 @@ def rename_component_ports(custom_comp: Union[Component, ComponentReference], re
 			portobj = port_list.pop(namepair[0])
 			portobj.name = namepair[1]
 			# custom_comp.ports[namepair[1]] = portobj
+			custom_comp.ports.filter
 			custom_comp.ports.add_port(port=portobj, name=namepair[1])
 		else:
 			raise KeyError("name " + str(namepair[0]) + " not in component ports")
@@ -154,7 +166,8 @@ def rename_component_ports(custom_comp: Union[Component, ComponentReference], re
 def rename_ports_by_orientation__call(old_name: str, pobj: HPort) -> str:
 	"""internal implementation of port orientation rename"""
 	if not "_" in old_name and not any(old_name==edge for edge in ["e1","e2","e3","e4"]):
-		raise ValueError("portname must contain underscore \"_\" " + old_name)
+		# raise ValueError("portname must contain underscore \"_\" " + old_name)
+		return ''
 	# get new suffix (port orientation)
 	new_suffix = None
 	angle = pobj.orientation % 360 if pobj.orientation is not None else 0
@@ -178,12 +191,12 @@ def rename_ports_by_orientation__call(old_name: str, pobj: HPort) -> str:
 
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def rename_ports_by_orientation(custom_comp: Union[Component, ComponentReference]) -> Union[Component, ComponentReference]:
-    """replaces the last part of the port name 
-    (after the last underscore, unless name is e1/2/3/4) with a direction
-    direction is one of N,E,S,W
-    returns the modified component
-    """
-    return rename_component_ports(custom_comp, rename_ports_by_orientation__call)
+	"""replaces the last part of the port name 
+	(after the last underscore, unless name is e1/2/3/4) with a direction
+	direction is one of N,E,S,W
+	returns the modified component
+	"""
+	return rename_component_ports(custom_comp, rename_ports_by_orientation__call)
 
 
 class rename_ports_by_list__call: 
@@ -255,13 +268,14 @@ def add_ports_perimeter(custom_comp: Component, layer: tuple[int, int], prefix: 
 		raise ValueError("you need underscore char in prefix")
 	temp = custom_comp.extract(layers=(layer,))
 	compbbox = temp.bbox_np()
-	width = abs(compbbox[1][0] - compbbox[0][0])
-	height = abs(compbbox[1][1] - compbbox[0][1])
-	custom_comp.add_port(name=prefix+"W",width=height,orientation=180,center=(compbbox[0][0],compbbox[0][1]+height/2),layer=layer,port_type="electrical")
-	custom_comp.add_port(name=prefix+"N",width=width,orientation=90,center=(compbbox[0][0]+width/2,compbbox[1][1]),layer=layer,port_type="electrical")
-	custom_comp.add_port(name=prefix+"E",width=height,orientation=0,center=(compbbox[1][0],compbbox[0][1]+height/2),layer=layer,port_type="electrical")
-	custom_comp.add_port(name=prefix+"S",width=width,orientation=270,center=(compbbox[0][0]+width/2,compbbox[0][1]),layer=layer,port_type="electrical")
-	return custom_comp
+	width = snap_to_grid(abs(compbbox[1][0] - compbbox[0][0]), 2)
+	height = snap_to_grid(abs(compbbox[1][1] - compbbox[0][1]), 2)
+	newcomp = custom_comp.copy()
+	newcomp.add_port(name=prefix+"W",width=height,orientation=180,center=(compbbox[0][0],compbbox[0][1]+height/2),layer=layer,port_type="electrical")
+	newcomp.add_port(name=prefix+"N",width=width,orientation=90,center=(compbbox[0][0]+width/2,compbbox[1][1]),layer=layer,port_type="electrical")
+	newcomp.add_port(name=prefix+"E",width=height,orientation=0,center=(compbbox[1][0],compbbox[0][1]+height/2),layer=layer,port_type="electrical")
+	newcomp.add_port(name=prefix+"S",width=width,orientation=270,center=(compbbox[0][0]+width/2,compbbox[0][1]),layer=layer,port_type="electrical")
+	return newcomp
 
 
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
@@ -378,7 +392,7 @@ def create_private_ports(custom_comp: Union[Component, ComponentReference], port
 	ports_to_add = list()
 	for port in custom_comp.get_ports_list():
 		if any([port.name.startswith(port_path) for port_path in port_paths]) or bypass:
-			ports_to_add.append(port.copy(name=port.name+"_private"))
+			ports_to_add.append(init_hashport(port, name_overload = port.name + '_private'))
 	return ports_to_add
 
 class PortTree:

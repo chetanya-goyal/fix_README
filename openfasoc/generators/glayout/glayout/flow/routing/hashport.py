@@ -8,6 +8,7 @@ from collections.abc import Callable
 from functools import partial
 from typing import Any, Dict, List, Optional, Tuple, Union
 import kfactory as kf
+from kfactory.kcell import LayerEnum as LE
 import numpy as np
 from rich.console import Console
 from rich.table import Table
@@ -15,8 +16,7 @@ from rich.table import Table
 from gdsfactory.cross_section import CrossSectionSpec
 Layer = tuple[int, int]
 Layers = tuple[Layer, ...]
-LayerSpec = Layer | str | None | kf.LayerEnum
-LayerSpecs = tuple[LayerSpec, ...]
+LayerSpec = Layer | str | None | LE
 Float2 = tuple[float, float]
 valid_error_types = ["error", "warn", "ignore"]
 

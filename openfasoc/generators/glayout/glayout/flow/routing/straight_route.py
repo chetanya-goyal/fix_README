@@ -80,11 +80,8 @@ def straight_route(
 		viaport_name = "route_E" if extension > 0 else "route_W"
 		alignment = ("r","c") if extension > 0 else ("l","c")
 		if extension == 0.0:
-			# print(edge1, edge2)
-			# print(f"edge1: {edge1.dcenter}, edge2: {edge2.dcenter}")
 			extension += kf.kcl.dbu * 10
 		size = (abs(extension),width)
-		# print(f"\n\n\n {startx, endx, extension, size} \n\n\n")
 	else:
 		starty = edge1.dcenter[1]
 		endy = edge2.dcenter[1]
@@ -92,23 +89,19 @@ def straight_route(
 		viaport_name = "route_N" if extension > 0 else "route_S"
 		alignment = ("c","t") if extension > 0 else ("c","b")
 		if extension == 0.0:
-			# print(edge1, edge2)
-			# print(f"edge1: {edge1.dcenter}, edge2: {edge2.dcenter}")
 			extension += kf.kcl.dbu * 10 # 
 		size = (width,abs(extension))
-		# print(f"\n\n\n {starty, endy, extension, size} \n\n\n")
 	# create route and via
-	rect = Component()
-	# if size[0] == 0.0:
-	# 	size[0] = 1e-12
-	# if size[1] == 0.0:
-	# 	size[1] = 1e-12
-	route = rect << primitive_rectangle(size=size,layer=pdk.get_glayer(glayer1))
+	route = Component()
+	dbunit = kf.kcl.dbu
+	finalsize = tuple([dbunit * (dbunit + 1) if size[0] <= dbunit else size[0], dbunit * (dbunit + 1) if size[1] <= dbunit else size[1]])
+	route = primitive_rectangle(size=finalsize,layer=pdk.get_glayer(glayer1))
+	# route = rect << primitive_rectangle(size=size,layer=pdk.get_glayer(glayer1))
 	# import pdb; pdb.set_trace()
 	# shape = route.add_polygon(rect.bbox_np(), layer=pdk.get_glayer(glayer1))
-	route = transformed(route)
+	# route = transformed(route)
 	# route.write_gds('newout.gds')
-	add_ports_perimeter(route,layer=pdk.get_glayer(glayer1),prefix="route_")
+	route = add_ports_perimeter(route,layer=pdk.get_glayer(glayer1),prefix="route_")
 	out_via = via_stack(pdk,glayer1,glayer2,fullbottom=fullbottom) if glayer1 != glayer2 else None
 	# place route and via
 	

@@ -210,7 +210,7 @@ def c_route(
 		route_ports = [set_port_width(port_,cwidth) for port_ in route_ports]
 	maxwidth = max(route_ports[0].width, route_ports[1].width)
 	# route_ports[0].dwidth = route_ports[1].dwidth = max(route_ports[0].dwidth, route_ports[1].dwidth)
-	
+	# import pdb; pdb.set_trace()
 	route_port0 = init_hashport(route_ports[0], width_overload=maxwidth, layer_overload=pdk.get_glayer(cglayer))
 	route_port1 = init_hashport(route_ports[1], width_overload=maxwidth, layer_overload=pdk.get_glayer(cglayer))
 	cconnection = croute << straight_route(pdk, route_port0,route_port1,glayer1=cglayer,glayer2=cglayer)

@@ -10,7 +10,9 @@ from glayout.flow.primitives.guardring import tapring
 from glayout.flow.pdk.util.port_utils import add_ports_perimeter	
 from gdsfactory.component import Component
 from typing import Optional, Union 
-
+from gdsfactory.snap import snap_to_grid
+from glayout.flow.routing.hashport import init_hashport
+from gdsfactory.add_padding import add_padding
 
 def current_mirror_netlist(
 	pdk: MappedPDK, 
@@ -93,14 +95,16 @@ def current_mirror(
 			with_tie=False, 
 			**kwargs
 		)
-	top_level.add_ports(interdigitized_fets.get_ports_list(), prefix="fet_")
+
+	top_level.add_ports(interdigitized_fets.ports, prefix="fet_")
 	maxmet_sep = pdk.util_max_metal_seperation()
 	# short source of the fets
-	source_short = interdigitized_fets << c_route(pdk, interdigitized_fets.ports['A_source_E'], interdigitized_fets.ports['B_source_E'], extension=3*maxmet_sep, viaoffset=False)
+	import pdb; pdb.set_trace()
+	source_short = interdigitized_fets << c_route(pdk, init_hashport(interdigitized_fets.ports['A_source_E'], layer_overload = pdk.get_glayer('met2')), init_hashport(interdigitized_fets.ports['B_source_E'], layer_overload = pdk.get_glayer('met2')), viaoffset=False)
 	# short gates of the fets
-	gate_short = interdigitized_fets << c_route(pdk, interdigitized_fets.ports['A_gate_W'], interdigitized_fets.ports['B_gate_W'], extension=3*maxmet_sep, viaoffset=False)
+	gate_short = interdigitized_fets << c_route(pdk, init_hashport(interdigitized_fets.ports['A_gate_W'], layer_overload = pdk.get_glayer('met2')), init_hashport(interdigitized_fets.ports['B_gate_W'], layer_overload = pdk.get_glayer('met2')), extension=3*maxmet_sep, viaoffset=False)
 	# short gate and drain of one of the reference 
-	interdigitized_fets << L_route(pdk, interdigitized_fets.ports['A_drain_W'], gate_short.ports['con_N'], viaoffset=False, fullbottom=False)
+	interdigitized_fets << L_route(pdk, init_hashport(interdigitized_fets.ports['A_drain_W'], layer_overload = pdk.get_glayer('met2')), init_hashport(gate_short.ports['con_N'], layer_overload = pdk.get_glayer('met2')), viaoffset=False, fullbottom=False)
 	
 	top_level << interdigitized_fets
 	# add the tie layer
@@ -111,37 +115,37 @@ def current_mirror(
         )
 		tap_sep += pdk.get_grule("p+s/d", "active_tap")["min_enclosure"]
 		tap_encloses = (
-		2 * (tap_sep + interdigitized_fets.xmax),
-		2 * (tap_sep + interdigitized_fets.ymax),
+			snap_to_grid(2 * (tap_sep + interdigitized_fets.dxmax), nm = 10),
+			snap_to_grid(2 * (tap_sep + interdigitized_fets.dymax), nm = 10)
 		)
 		tie_ref = top_level << tapring(pdk, enclosed_rectangle = tap_encloses, sdlayer = "p+s/d", horizontal_glayer = tie_layers[0], vertical_glayer = tie_layers[1])
-		top_level.add_ports(tie_ref.get_ports_list(), prefix="welltie_")
+		top_level.add_ports(tie_ref.ports, prefix="welltie_")
 		try:
-			top_level << straight_route(pdk, top_level.ports["A_0_dummy_L_gsdcon_top_met_W"],top_level.ports["welltie_W_top_met_W"],glayer2="met1")
+			top_level << straight_route(pdk, init_hashport(top_level.ports["A_0_dummy_L_gsdcon_top_met_W"], layer_overload = pdk.get_glayer('met1')), init_hashport(top_level.ports["welltie_W_top_met_W"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
 		except KeyError:
 			pass
 		try:
 			end_col = numcols - 1
 			port1 = f'B_{end_col}_dummy_R_gdscon_top_met_E'
-			top_level << straight_route(pdk, top_level.ports[port1], top_level.ports["welltie_E_top_met_E"], glayer2="met1")
+			top_level << straight_route(pdk, init_hashport(top_level.ports[port1], layer_overload = pdk.get_glayer('met1')), init_hashport(top_level.ports["welltie_E_top_met_E"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
 		except KeyError:
 			pass
 	
 	# add a pwell 
-	top_level.add_padding(layers = (pdk.get_glayer("pwell"),), default = pdk.get_grule("pwell", "active_tap")["min_enclosure"], )
+	top_level = add_padding(top_level, layers = (pdk.get_glayer("pwell"),), default = pdk.get_grule("pwell", "active_tap")["min_enclosure"], )
 	top_level = add_ports_perimeter(top_level, layer = pdk.get_glayer("pwell"), prefix="well_")
  
 	# add the substrate tap if specified
 	if with_substrate_tap:
 		subtap_sep = pdk.get_grule("dnwell", "active_tap")["min_separation"]
 		subtap_enclosure = (
-			2.5 * (subtap_sep + interdigitized_fets.xmax),
-			2.5 * (subtap_sep + interdigitized_fets.ymax),
+			snap_to_grid(2.5 * (subtap_sep + interdigitized_fets.xmax), nm = 10),
+			snap_to_grid(2.5 * (subtap_sep + interdigitized_fets.ymax), nm = 10)
 		)
 		subtap_ring = top_level << tapring(pdk, enclosed_rectangle = subtap_enclosure, sdlayer = "p+s/d", horizontal_glayer = "met2", vertical_glayer = "met1")
-		top_level.add_ports(subtap_ring.get_ports_list(), prefix="substrate_tap_")
+		top_level.add_ports(subtap_ring.ports, prefix="substrate_tap_")
   
-	top_level.add_ports(source_short.get_ports_list(), prefix='purposegndports')
+	top_level.add_ports(source_short.ports, prefix='purposegndports')
 	
 	
 	top_level.info['netlist'] = current_mirror_netlist(

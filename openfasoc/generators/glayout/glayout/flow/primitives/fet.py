@@ -38,7 +38,7 @@ def __gen_fingers_macro(pdk: MappedPDK, rmult: int, fingers: int, length: float,
     poly_spacing += met1_minsep if length < met1_minsep else 0
     # create a single finger
     poly_spacing = snap_to_grid(poly_spacing, nm = 10)
-    finger = Component(f'{finger_cell_name}')
+    finger = Component()
     gate = finger << rectangle(size=(length, poly_height), layer=pdk.get_glayer("poly"), centered=True)
     sd_viaarr = via_array(pdk, "active_diff", "met1", size=(snap_to_grid(sd_viaxdim, nm = 10), width), minus1=True, lay_bottom=False).copy()
     interfinger_correction = via_array(pdk,"met1",inter_finger_topmet, size=(None, width),lay_every_layer=True, num_vias=(1,None))
@@ -301,7 +301,7 @@ def __mult_array_macro(
     # create multiplier array
     pdk.activate()
     # TODO: error checking
-    multiplier_arr = Component("temp multiplier array")
+    multiplier_arr = Component()
     multiplier_comp = multiplier(
         pdk,
         sdlayer,
@@ -317,21 +317,21 @@ def __mult_array_macro(
         interfinger_rmult=interfinger_rmult,
         dummy_routes=dummy_routes
     )
-    _max_metal_seperation_ps = max([pdk.get_grule("met"+str(i))["min_separation"] for i in range(1,5)])
-    multiplier_separation = (
+    _max_metal_seperation_ps = snap_to_grid(max([pdk.get_grule("met"+str(i))["min_separation"] for i in range(1,5)]), nm = 10)
+    multiplier_separation = snap_to_grid((
         to_decimal(_max_metal_seperation_ps)
         + evaluate_bbox(multiplier_comp, True)[1]
-    )
+    ), nm = 10)
     for rownum in range(multipliers):
-        row_displacment = rownum * multiplier_separation - (multiplier_separation/2 * (multipliers-1))
+        row_displacment = snap_to_grid(rownum * multiplier_separation - (multiplier_separation/2 * (multipliers-1)), nm = 10)
         row_ref = multiplier_arr << multiplier_comp
-        row_ref.dmovey(to_float(row_displacment))
+        row_ref.dmovey(snap_to_grid(to_float(row_displacment), nm = 10))
         multiplier_arr.add_ports(
             row_ref.ports, prefix="multiplier_" + str(rownum) + "_"
         )
     # TODO: fix extension (both extension are broken. IDK src extension and drain extension IDK metal layer)
     src_extension = to_decimal(0.6)
-    drain_extension = src_extension + 3*to_decimal(pdk.get_grule("met4")["min_separation"])
+    drain_extension = snap_to_grid(src_extension + 3*to_decimal(pdk.get_grule("met4")["min_separation"]), nm = 10)
     sd_side = "W" if sd_route_left else "E"
     gate_side = "E" if sd_route_left else "W"
     # import pdb; pdb.set_trace()
@@ -369,7 +369,7 @@ def __mult_array_macro(
     final_arr = Component()
     marrref = final_arr << multiplier_arr
     correctionxy = prec_center(marrref)
-    marrref.dmovex(correctionxy[0]).dmovey(correctionxy[1])
+    marrref.dmovex(snap_to_grid(correctionxy[0], nm = 10)).dmovey(snap_to_grid(correctionxy[1], nm = 10))
     final_arr.add_ports(marrref.ports)
     return component_snap_to_grid(rename_ports_by_orientation(final_arr), flatten_true = False)
 

@@ -133,7 +133,6 @@ def via_stack(
     level1, level2 = ordered_layer_info[0]
     glayer1, glayer2 = ordered_layer_info[1]
     viastack = Component()
-    # import pdb; pdb.set_trace()
     
     # if same level return component with min_width rectangle on that layer
     if level1 == level2:

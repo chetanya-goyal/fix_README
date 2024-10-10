@@ -7,10 +7,11 @@ from decimal import Decimal
 from pathlib import Path
 from gdsfactory.snap import snap_to_grid2x, snap_to_grid
 import pickle
-from PrettyPrint import PrettyPrintTree
 import math
+from PrettyPrint import PrettyPrintTree
 import kfactory as kf
 from kfactory.kcell import InstancePorts, Port
+
 @validate_arguments(config=dict(arbitrary_types_allowed=True))
 def parse_direction(direction: Union[int, str]) -> int:
 	"""returns 1,2,3,4 (W,N,E,S)

@@ -82,7 +82,7 @@ def current_mirror(
 			pdk, 
 			numcols=numcols, 
 			dummy=with_dummy, 
-			with_substrate_tap=False, 
+			with_substrate_tap=True, 
 			with_tie=False, 
 			**kwargs
 		)
@@ -95,11 +95,10 @@ def current_mirror(
 			with_tie=False, 
 			**kwargs
 		)
-
+  
 	top_level.add_ports(interdigitized_fets.ports, prefix="fet_")
 	maxmet_sep = pdk.util_max_metal_seperation()
 	# short source of the fets
-	import pdb; pdb.set_trace()
 	source_short = interdigitized_fets << c_route(pdk, init_hashport(interdigitized_fets.ports['A_source_E'], layer_overload = pdk.get_glayer('met2')), init_hashport(interdigitized_fets.ports['B_source_E'], layer_overload = pdk.get_glayer('met2')), viaoffset=False)
 	# short gates of the fets
 	gate_short = interdigitized_fets << c_route(pdk, init_hashport(interdigitized_fets.ports['A_gate_W'], layer_overload = pdk.get_glayer('met2')), init_hashport(interdigitized_fets.ports['B_gate_W'], layer_overload = pdk.get_glayer('met2')), extension=3*maxmet_sep, viaoffset=False)
@@ -121,12 +120,12 @@ def current_mirror(
 		tie_ref = top_level << tapring(pdk, enclosed_rectangle = tap_encloses, sdlayer = "p+s/d", horizontal_glayer = tie_layers[0], vertical_glayer = tie_layers[1])
 		top_level.add_ports(tie_ref.ports, prefix="welltie_")
 		try:
-			top_level << straight_route(pdk, init_hashport(top_level.ports["A_0_dummy_L_gsdcon_top_met_W"], layer_overload = pdk.get_glayer('met1')), init_hashport(top_level.ports["welltie_W_top_met_W"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
+			top_level << straight_route(pdk, init_hashport(top_level.ports["fet_A_0_dummy_L_gsdcon_top_met_W"], layer_overload = pdk.get_glayer('met1')), init_hashport(top_level.ports["welltie_W_top_met_W"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
 		except KeyError:
 			pass
 		try:
 			end_col = numcols - 1
-			port1 = f'B_{end_col}_dummy_R_gdscon_top_met_E'
+			port1 = f'fet_B_{end_col}_dummy_R_gsdcon_top_met_E'
 			top_level << straight_route(pdk, init_hashport(top_level.ports[port1], layer_overload = pdk.get_glayer('met1')), init_hashport(top_level.ports["welltie_E_top_met_E"], layer_overload = pdk.get_glayer('met1')), glayer2="met1")
 		except KeyError:
 			pass
@@ -139,8 +138,8 @@ def current_mirror(
 	if with_substrate_tap:
 		subtap_sep = pdk.get_grule("dnwell", "active_tap")["min_separation"]
 		subtap_enclosure = (
-			snap_to_grid(2.5 * (subtap_sep + interdigitized_fets.xmax), nm = 10),
-			snap_to_grid(2.5 * (subtap_sep + interdigitized_fets.ymax), nm = 10)
+			snap_to_grid(2 * (subtap_sep + top_level.dxmax), nm = 10),
+			snap_to_grid(2.5 * (subtap_sep + interdigitized_fets.dymax), nm = 10)
 		)
 		subtap_ring = top_level << tapring(pdk, enclosed_rectangle = subtap_enclosure, sdlayer = "p+s/d", horizontal_glayer = "met2", vertical_glayer = "met1")
 		top_level.add_ports(subtap_ring.ports, prefix="substrate_tap_")
@@ -148,11 +147,11 @@ def current_mirror(
 	top_level.add_ports(source_short.ports, prefix='purposegndports')
 	
 	
-	top_level.info['netlist'] = current_mirror_netlist(
-		pdk, 
-  		width=kwargs.get('width', 3), length=kwargs.get('length', 1), multipliers=numcols, 
-    	n_or_p_fet=device,
-		subckt_only=True
-	)
+	# top_level.info['netlist'] = current_mirror_netlist(
+	# 	pdk, 
+  	# 	width=kwargs.get('width', 3), length=kwargs.get('length', 1), multipliers=numcols, 
+    # 	n_or_p_fet=device,
+	# 	subckt_only=True
+	# )
  
 	return top_level

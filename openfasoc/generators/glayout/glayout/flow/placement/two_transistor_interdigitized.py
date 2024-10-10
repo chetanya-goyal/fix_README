@@ -124,8 +124,8 @@ def two_nfet_interdigitized(
     """
     base_multiplier = Component()
     dummycomp = base_multiplier << macro_two_transistor_interdigitized(pdk, numcols, "nfet", dummy, **kwargs)
-    base_multiplier.add_ports(dummycomp.ports)
     dummycomp.dmove(origin = (dummycomp.dcenter.x, dummycomp.dcenter.y), destination = (0, 0))
+    base_multiplier.add_ports(dummycomp.ports)
     # tie
     
     if with_tie:
@@ -207,8 +207,8 @@ def two_pfet_interdigitized(
     """
     base_multiplier = Component()
     dummycomp = base_multiplier << macro_two_transistor_interdigitized(pdk, numcols, "pfet", dummy, **kwargs)
-    base_multiplier.add_ports(dummycomp.ports)
     dummycomp.dmove(origin = (dummycomp.dcenter.x, dummycomp.dcenter.y), destination = (0, 0))
+    base_multiplier.add_ports(dummycomp.ports)
     # tie
     if with_tie:
         tap_separation = max(
@@ -264,8 +264,6 @@ def two_pfet_interdigitized(
         base_multiplier.add_ports(tapring_ref.ports,prefix="substratetap_")
     base_multiplier.info["route_genid"] = "two_transistor_interdigitized"
     return base_multiplier
-
-
 
 
 def two_transistor_interdigitized(

@@ -31,8 +31,8 @@ from glayout.flow.blocks.current_mirror import current_mirror
 # celll = via_array(sky130, 'met1', 'met2', (5, 5))
 # celll = via_stack(sky130, 'met1', 'met2')
 # celll = two_transistor_interdigitized(sky130, 'pfet', 5)
-# celll = two_transistor_place(sky130, 'aba bab', (nmos, {'pdk': sky130}), (pmos, {'pdk': sky130}))
-celll = generic_4T_interdigitzed(sky130, 'nfet', 'pfet', 5)
+# celll = two_transistor_place(sky130, 'aba bab', (nmos, {'pdk': sky13 0}), (pmos, {'pdk': sky130}))
+# celll = generic_4T_interdigitzed(sky130, 'nfet', 'pfet', 5)
 # celll = current_mirror(sky130, 5, 'nfet')
 
 # copied = cell.copy()
